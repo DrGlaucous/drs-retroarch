@@ -1,0 +1,1 @@
+For the testing environment to work correctly, place RetroArch-Win64 (or non-windows variant) in here, or add retroarch to the system path and change launch.json accordingly

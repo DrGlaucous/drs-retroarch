@@ -1,0 +1,60 @@
+from the mainloop, the game is initialized with arguments, then run.
+
+on initialization, the game:
+starts the logger,
+makes game box,
+makes context box,
+starts filesystem,
+starts discord RPC,
+sets game scene to loading screen,
+proceeds to mainloop
+
+in context.run (where mainloop is entered from initialization code),
+the backend is started
+the backend event loop is started
+the backend renderer is started
+
+
+several backend structs:
+(other things can be done outside of the 'backend' requirements to ensure they get done, typically in the form of new())
+
+LibretroBackend/Backend
+[initializes the event loop]{new initializes backend}
+
+LibretroEventLoop/BackendEventLoop
+[runs mainloop of game/initializes imgui renderer]{new starts window and looks for gl renderer}
+
+LibretroRenderer/BackendRenderer
+[various texture operations, like drawing, copying, creating new textures, and deleting old ones]
+
+LibretroTexture/BackendTexture
+[wrapper for backend's texture (holds pointer to texture), width, height, blitting the texture to other surfaces, draw, tint, flip, flip and tint]
+
+
+External flow:
+core entry point must be in the sub-project
+
+remove the loop() section of BackendEventLoop, so it returns immediately
+(note: event_loop.run(game, self) is only executed one time in the entire execution process already)
+
+we need to know what part of BackendEventLoop to invoke other than run().
+add special functions to LibretroEventLoop to manage the looping part of run(). This the rest of the core
+must be extended from LibretroEventLoop.
+
+
+From the outter core, we need to know that the backend we have is a LibretroEventLoop instead of a BackendEventLoop. (this means more core-specific functions...)
+This way, we can call the update() and init() functions as a sub-part of the LibretroEventLoop instead of from the BackendEventLoop (saving on adding this type to *all* backends)
+
+we also need to pass *in* the callbacks from the main core.
+these need to be delegated to the backend's context as well.
+
+
+
+
+
+
+
+
+
+
+

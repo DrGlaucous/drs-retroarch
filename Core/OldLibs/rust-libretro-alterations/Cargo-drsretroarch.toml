@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+
+[package]
+name = "drsretroarch"
+description = "doukutsu-rs targeted for Retroarch"
+version = "0.1.0"
+edition = "2021"
+
+#some botched stuff when setting up the cargo files
+#default = ["default-base", "backend-libretro", "render-opengl", "exe", "webbrowser"]
+# [lib]
+# crate-type = ["cdylib"]
+# path = "src/lib.rs"
+# test = false
+# bench = false
+# required-features = ["clib"]
+
+
+[lib]
+crate-type = ["cdylib"]
+
+
+[dependencies]
+rust-libretro = { version = "0.3.1", path = "../../rust-libretro-master/rust-libretro", features = [ "log", "unstable-env-commands" ] }
+doukutsu-rs = { path = "../", default-features = false, features = ["default-base", "backend-libretro"] }
+libc = "0.2.139"
+
+
+

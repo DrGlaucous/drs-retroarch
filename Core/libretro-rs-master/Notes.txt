@@ -1,0 +1,3 @@
+run retroarch with core from this folder:
+
+..\..\Engine\RetroArch-Win64\retroarch.exe --verbose -L .\target\debug\example.dll ..\..\Particle.ch8
