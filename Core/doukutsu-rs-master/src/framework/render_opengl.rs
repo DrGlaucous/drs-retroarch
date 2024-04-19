@@ -24,9 +24,9 @@ use crate::game::GAME_SUSPENDED;
 pub struct GLContext {
     pub gles2_mode: bool,
     pub is_sdl: bool,
-    pub get_proc_address: unsafe fn(user_data: &mut *mut c_void, name: &str) -> *const c_void,
-    pub swap_buffers: unsafe fn(user_data: &mut *mut c_void),
-    pub user_data: *mut c_void,
+    pub get_proc_address: unsafe fn(user_data: &mut *mut c_void, name: &str) -> *const c_void, //gets the address of the opengl function
+    pub swap_buffers: unsafe fn(user_data: &mut *mut c_void), //swaps hardware buffers for rendering
+    pub user_data: *mut c_void, //void pointer to opengl user data
     pub ctx: *mut Context,
 }
 

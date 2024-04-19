@@ -137,7 +137,7 @@ impl LibretroEventLoop {
 //not really used, since there are many special functions inside the libretroEventLoop
 impl BackendEventLoop for LibretroEventLoop {
 
-    //called one time, normally loops indefinitely inside, but must return immeadiately for this core type
+    //called one time, normally loops indefinitely inside, but must return immeadiately for this core type (is unused here: see update())
     fn run(&mut self, game: &mut Game, ctx: &mut Context) {
         let state_ref = unsafe { &mut *game.state.get() };
 

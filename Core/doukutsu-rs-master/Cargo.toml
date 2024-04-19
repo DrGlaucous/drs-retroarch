@@ -54,7 +54,7 @@ exe = []
 android = []
 
 #new stuff
-backend-libretro = ["libretro-rs"]
+backend-libretro = ["libretro-rs", "render-opengl"]
 
 
 [dependencies]

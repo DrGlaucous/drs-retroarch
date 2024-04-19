@@ -200,6 +200,7 @@ impl<'a> Core<'a> for LibretroCore<'a> {
 		()
 	}
 
+
 	//this is the important init() section, since it has access to the ROM data at this point
 	fn load_game<E: env::LoadGame>(
 		_game: &GameInfo,
@@ -214,18 +215,38 @@ impl<'a> Core<'a> for LibretroCore<'a> {
 			..
 		} = args;
 
-		//let's use gles2, since the backend already supports it
-		let gloptions = GLOptions::new(GLContextType::OpenGLES2);
+
+		//let's use opengl, since the backend already supports it (but how do I get to the callbacks?)
+		let gloptions = GLOptions::new(GLContextType::OpenGL2); //
+
 		let rendering_mode = env.set_hw_render_gl(gloptions)?;
+
+		// {
+		// 	let mut data: retro_hw_render_callback = gloptions.into();
+		// 	data.context_destroy = Some(self.gl.context_destroy);
+		// 	data.context_reset = Some(self.gl.context_reset);
+		// 	unsafe {
+		// 	  let data: retro_hw_render_callback = self.cmd(RETRO_ENVIRONMENT_SET_HW_RENDER, data)?;
+		// 	  self.gl.core_callbacks = Some(GLContextCallbacks {
+		// 		get_current_framebuffer_cb: data.get_current_framebuffer.unwrap_unchecked(),
+		// 		get_proc_address_cb: data.get_proc_address.unwrap_unchecked(),
+		// 	  });
+		// 	}
+		// }
+
+
+		
+
 
 		let pixel_format = env.set_pixel_format_xrgb8888(pixel_format)?;
 		//let data: &[u8] = game.as_data().ok_or(CoreError::new())?.data();
 		
+		//env.get_variable(key)
 
 		let options = doukutsu_rs::game::LaunchOptions { server_mode: false, editor: false, return_types: true };
 		let (game, context) = doukutsu_rs::game::init(options).unwrap();
 
-
+		
 
 		let mut bor_context = context.unwrap();
 		let mut borrowed = game.unwrap();
@@ -261,7 +282,7 @@ impl<'a> Core<'a> for LibretroCore<'a> {
 	fn run(&mut self, _env: &mut impl env::Run, callbacks: &mut impl Callbacks) -> InputsPolled {
 		let inputs_polled = self.update_input(callbacks);
 
-		//self.event_loop.update(self.state_ref, self.game.as_mut().get_mut(), &mut self.context, callbacks);
+		self.event_loop.update(self.state_ref, self.game.as_mut().get_mut(), &mut self.context, callbacks);
 
 		//self.cpu.step_for(25);
 
@@ -285,19 +306,19 @@ impl<'a> Core<'a> for LibretroCore<'a> {
 }
 
 
-unsafe impl<'a> OpenGLCore<'a> for LibretroCore<'a> {
+// unsafe impl<'a> OpenGLCore<'a> for LibretroCore<'a> {
 
-	fn context_destroy(&mut self, env: &mut impl env::Environment) {
-		let myvar = 3;
+// 	fn context_destroy(&mut self, env: &mut impl env::Environment) {
+// 		let myvar = 3;
 
-	}
-	fn context_reset(&mut self, env: &mut impl env::Environment, callbacks: GLContextCallbacks) {
-		let myvar = 3;	
+// 	}
+// 	fn context_reset(&mut self, env: &mut impl env::Environment, callbacks: GLContextCallbacks) {
+// 		let myvar = 3;	
 
-		let also = myvar + 2;	
-	}
+// 		let also = myvar + 2;	
+// 	}
 
-}
+// }
 
 
 
