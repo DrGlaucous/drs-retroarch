@@ -1,0 +1,4 @@
+[submodule "rustation"]
+	path = rustation
+	url = https://github.com/simias/rustation.git
+	branch = libretro

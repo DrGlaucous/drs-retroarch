@@ -1,0 +1,38 @@
+[package]
+name = "rustation-retro"
+
+# This version is not the one used in the libretro core "system info",
+# instead we take the one from the rustation dependency
+version = "0.1.0"
+
+authors = ["Lionel Flandrin <lionel.flandrin@gmail.com>"]
+
+description = "Libretro implementation for the Rustation PlayStation emulator"
+
+license = "GPL-2.0+"
+keywords = ["emulator", "playstation"]
+
+[features]
+trace = [ "rustation/trace" ]
+
+[lib]
+name = "rustation_retro"
+crate-type = ["dylib"]
+
+[dependencies]
+libc = "0.2"
+gl = "0.6"
+log = "0.3"
+arrayvec = "0.4"
+rustc-serialize = "0.3"
+time = "0.1"
+
+
+
+#[dependencies.rustation]
+#path = "rustation"
+rustation = { path = "./3rdparty/rustation"}
+
+#[dependencies.cdimage]
+#path = "rustation/cdimage"
+cdimage = { path = "./3rdparty/rustation/cdimage"}

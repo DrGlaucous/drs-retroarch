@@ -1,0 +1,3 @@
+[submodule "cdimage"]
+	path = cdimage
+	url = https://github.com/simias/cdimage.git

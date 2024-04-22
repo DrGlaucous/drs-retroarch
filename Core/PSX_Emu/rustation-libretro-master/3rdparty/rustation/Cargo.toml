@@ -1,0 +1,35 @@
+[package]
+
+name = "rustation"
+
+# Should match the latest git tag! This version info is used to set
+# the internal `VERSION` string if "git describe" is unavailable.
+version = "0.0.3"
+
+authors = ["Lionel Flandrin <lionel@svkt.org>"]
+description = "A PlayStation emulator"
+homepage = "https://github.com/simias/rustation"
+repository = "https://github.com/simias/rustation"
+documentation = "https://github.com/simias/rustation/wiki"
+readme = "README.md"
+license = "GPL-2.0+"
+keywords = ["emulator", "playstation"]
+
+build = "build.rs"
+
+[features]
+trace = [ "lazy_static" ]
+
+[dependencies]
+shaman = "0.1"
+log = "0.3"
+arrayvec = "0.4"
+rustc-serialize = "0.3"
+lazy_static = { version = "0.2", optional = true }
+
+[lib]
+name = "rustation"
+crate-type = ["rlib"]
+
+[dependencies.cdimage]
+path = "cdimage"

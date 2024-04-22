@@ -1,0 +1,10 @@
+language: rust
+os:
+  - linux
+before_script:
+  - rustc -V
+  - cargo -V
+script:
+  - cargo build -v
+  - cargo build -v --features trace
+  - cargo test
