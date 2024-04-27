@@ -6,6 +6,7 @@ use std::mem;
 use std::mem::MaybeUninit;
 use std::ptr::null;
 use std::sync::Arc;
+use std::rc::Rc;
 
 use imgui::{DrawCmd, DrawCmdParams, DrawData, DrawIdx, DrawVert, TextureId, Ui};
 
@@ -25,7 +26,8 @@ pub struct GLContext {
     pub gles2_mode: bool,
     pub is_sdl: bool,
     pub get_proc_address: unsafe fn(user_data: &mut *mut c_void, name: &str) -> *const c_void, //gets the address of the opengl function
-    pub swap_buffers: unsafe fn(user_data: &mut *mut c_void), //swaps hardware buffers for rendering
+    pub swap_buffers: unsafe fn(user_data: &mut *mut c_void), //swaps hardware buffers for rendering (only for double-buffered systems)
+    pub get_current_buffer: unsafe fn(user_data: &mut *mut c_void) -> usize, //get number of the current frambebuffer for the screen (only for single-buffered systems)
     pub user_data: *mut c_void, //void pointer to opengl user data
     pub ctx: *mut Context,
 }
@@ -46,6 +48,7 @@ impl BackendTexture for OpenGLTexture {
         (self.width, self.height)
     }
 
+    //add operations from this texture to a destination (typically the output framebuffer)
     fn add(&mut self, command: SpriteBatchCommand) {
         let (tex_scale_x, tex_scale_y) = (1.0 / self.width as f32, 1.0 / self.height as f32);
 
@@ -212,10 +215,12 @@ impl BackendTexture for OpenGLTexture {
         }
     }
 
+    //remove pending operations
     fn clear(&mut self) {
         self.vertices.clear();
     }
 
+    //push texture to main window
     fn draw(&mut self) -> GameResult {
         unsafe {
             if let Some(gl) = &GL_PROC {
@@ -231,9 +236,12 @@ impl BackendTexture for OpenGLTexture {
                 gl.gl.Enable(gl::BLEND);
                 gl.gl.Disable(gl::DEPTH_TEST);
 
+                //tell it how it should handle vertex data
                 self.shader.bind_attrib_pointer(gl, self.vbo);
 
+                //set source to this texture?
                 gl.gl.BindTexture(gl::TEXTURE_2D, self.texture_id);
+                //parse the vectors for drawing
                 gl.gl.BufferData(
                     gl::ARRAY_BUFFER,
                     (self.vertices.len() * mem::size_of::<VertexData>()) as _,
@@ -241,8 +249,10 @@ impl BackendTexture for OpenGLTexture {
                     gl::STREAM_DRAW,
                 );
 
+                //draw them to vbo?
                 gl.gl.DrawArrays(gl::TRIANGLES, 0, self.vertices.len() as _);
 
+                //release bindings
                 gl.gl.BindTexture(gl::TEXTURE_2D, 0);
                 gl.gl.BindBuffer(gl::ARRAY_BUFFER, 0);
 
@@ -339,6 +349,7 @@ impl Default for RenderShader {
     }
 }
 
+//handles shaders and vertex processing
 impl RenderShader {
     fn compile(gl: &Gl, vertex_shader: &str, fragment_shader: &str) -> GameResult<RenderShader> {
         let mut shader = RenderShader::default();
@@ -403,9 +414,10 @@ impl RenderShader {
         Ok(shader)
     }
 
+    //tell renderer how an array of vectors should be treated
     unsafe fn bind_attrib_pointer(&self, gl: &Gl, vbo: GLuint) -> GameResult {
         gl.gl.UseProgram(self.program_id);
-        gl.gl.BindBuffer(gl::ARRAY_BUFFER, vbo);
+        gl.gl.BindBuffer(gl::ARRAY_BUFFER, vbo); //output buffer (VBO)
         gl.gl.EnableVertexAttribArray(self.position);
         gl.gl.EnableVertexAttribArray(self.uv);
         gl.gl.EnableVertexAttribArray(self.color);
@@ -450,8 +462,8 @@ struct RenderData {
     ebo: GLuint,
     font_texture: GLuint,
     font_tex_size: (f32, f32),
-    surf_framebuffer: GLuint,
-    surf_texture: GLuint,
+    surf_framebuffer: GLuint, //input hole
+    surf_texture: GLuint, //output hole
     last_size: (u32, u32),
 }
 
@@ -463,7 +475,7 @@ impl RenderData {
             fill_shader: RenderShader::default(),
             fill_water_shader: RenderShader::default(),
             vbo: 0,
-            ebo: 0,
+            ebo: 0, //for IMGUI
             font_texture: 0,
             font_tex_size: (1.0, 1.0),
             surf_framebuffer: 0,
@@ -481,6 +493,7 @@ impl RenderData {
         let fshdr_fill_water = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER_WATER };
 
         unsafe {
+            //compile shaders
             self.tex_shader =
                 RenderShader::compile(gl, vshdr_basic, fshdr_tex).unwrap_or_else(|_| RenderShader::default());
             self.fill_shader =
@@ -488,9 +501,11 @@ impl RenderData {
             self.fill_water_shader =
                 RenderShader::compile(gl, vshdr_basic, fshdr_fill_water).unwrap_or_else(|_| RenderShader::default());
 
+            //what are vbo and ebo for?
             self.vbo = return_param(|x| gl.gl.GenBuffers(1, x));
             self.ebo = return_param(|x| gl.gl.GenBuffers(1, x));
 
+            //build font textures (seems like one of the more obvious ones) for imgui
             self.font_texture = return_param(|x| gl.gl.GenTextures(1, x));
             gl.gl.BindTexture(gl::TEXTURE_2D, self.font_texture);
             gl.gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as _);
@@ -517,6 +532,7 @@ impl RenderData {
                 atlas.tex_id = (self.font_texture as usize).into();
             }
 
+
             let texture_id = return_param(|x| gl.gl.GenTextures(1, x));
 
             gl.gl.BindTexture(gl::TEXTURE_2D, texture_id);
@@ -533,16 +549,20 @@ impl RenderData {
                 240 as _,
                 0,
                 gl::RGBA,
-                gl::UNSIGNED_BYTE,
+                gl::UNSIGNED_BYTE, //colors are 0-255
                 null() as _,
             );
 
+            //release binding
             gl.gl.BindTexture(gl::TEXTURE_2D, 0 as _);
 
+            //save id of the texture we made above
             self.surf_texture = texture_id;
 
+            //create a framebuffer to copy things to
             let framebuffer_id = return_param(|x| gl.gl.GenFramebuffers(1, x));
 
+            //attach the texture_id to the framebuffer_id (things rendered to framebuffer_id will be sent to texture_id)
             gl.gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_id);
             gl.gl.FramebufferTexture2D(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::TEXTURE_2D, texture_id, 0);
             let draw_buffers = [gl::COLOR_ATTACHMENT0];
@@ -591,6 +611,8 @@ pub struct OpenGLRenderer {
     context_active: Arc<RefCell<bool>>,
     def_matrix: [[f32; 4]; 4],
     curr_matrix: [[f32; 4]; 4],
+
+    has_set_res: bool,
 }
 
 impl OpenGLRenderer {
@@ -602,6 +624,7 @@ impl OpenGLRenderer {
             context_active: Arc::new(RefCell::new(true)),
             def_matrix: [[0.0; 4]; 4],
             curr_matrix: [[0.0; 4]; 4],
+            has_set_res: false
         }
     }
 
@@ -617,6 +640,18 @@ impl OpenGLRenderer {
 
         Some((&mut self.refs, gl))
     }
+
+    //returns current screenbuffer number if backend is libretro, otherwise, 0 for backends that use the swap method
+    fn get_screen_fb(&mut self) -> GLuint {
+        unsafe{
+            let fbo = if let Some((context, _)) = self.get_context() {
+                ((context.get_current_buffer))(&mut context.user_data)
+
+            } else {0} as GLuint;
+            fbo
+        }
+    }
+
 }
 
 impl BackendRenderer for OpenGLRenderer {
@@ -647,14 +682,25 @@ impl BackendRenderer for OpenGLRenderer {
 
         unsafe {
             if let Some((_, gl)) = self.get_context() {
-                gl.gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
-                gl.gl.ClearColor(0.0, 0.0, 0.0, 1.0);
+
+
+                let fbo = self.get_screen_fb();
+
+
+                //clear leftovers
+                gl.gl.BindFramebuffer(gl::FRAMEBUFFER, fbo);
+
+
+                gl.gl.Viewport(0, 0, 320 as GLsizei, 240 as GLsizei);
+
+
+                gl.gl.ClearColor(0.0, 1.0, 0.0, 1.0);
                 gl.gl.Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
                 let matrix =
                     [[2.0f32, 0.0, 0.0, 0.0], [0.0, -2.0, 0.0, 0.0], [0.0, 0.0, -1.0, 0.0], [-1.0, 1.0, 0.0, 1.0]];
 
-                self.render_data.tex_shader.bind_attrib_pointer(gl, self.render_data.vbo);
+                self.render_data.tex_shader.bind_attrib_pointer(gl, self.render_data.vbo); //set source?
                 gl.gl.UniformMatrix4fv(self.render_data.tex_shader.proj_mtx, 1, gl::FALSE, matrix.as_ptr() as _);
 
                 let color = (255, 255, 255, 255);
@@ -667,12 +713,69 @@ impl BackendRenderer for OpenGLRenderer {
                     VertexData { position: (1.0, 1.0), uv: (1.0, 0.0), color },
                 ];
 
+                //draw from surf_texture to output...
                 self.draw_arrays_tex_id(
                     gl::TRIANGLES,
                     &vertices,
                     self.render_data.surf_texture,
                     BackendShader::Texture,
                 )?;
+
+                //TEST
+                //let rct = Rect::new(0 as isize,0,40,40);
+                //self.draw_rect(rct, Color::from_rgba(255, 0, 0, 128));
+
+                //gl.gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, self.get_screen_fb());
+                //gl.gl.BindFramebuffer(gl::READ_FRAMEBUFFER, 0);
+
+                // let fbo = if let Some((context, _)) = self.get_context() {
+                //     ((context.get_current_buffer))(&mut context.user_data)
+                // } else {0} as GLuint;
+                // //gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, fbo);
+                // gl.gl.BindFramebuffer(gl::FRAMEBUFFER, fbo);
+                gl.gl.Disable(gl::BLEND);
+                gl.gl.BlendColor(0., 0., 0., 1.0);
+                gl.gl.ClearColor(0.5,
+                    1.0,
+                    1.0,
+                    // XXX Not entirely sure what happens
+                    // to the mask bit in fill_rect. No$
+                    // seems to say that it's set to 0.
+                    0.);
+                gl.gl.Clear(gl::COLOR_BUFFER_BIT);
+
+                 //test minimal draw
+                let uv = (0.0, 0.0);
+                let color = (255, 0, 0, 0);
+
+                let vertices = [
+                    VertexData { position: (-1.0 as _, 1.0 as _), uv, color },
+                    VertexData { position: (-1.0 as _, -1.0 as _), uv, color },
+                    VertexData { position: (1.0 as _, -1.0 as _), uv, color },
+                    //VertexData { position: (fb_x_start as _, fb_y_end as _), uv, color },
+                    //VertexData { position: (fb_x_end as _, fb_y_start as _), uv, color },
+                    //VertexData { position: (fb_x_end as _, fb_y_end as _), uv, color },
+                ];
+                gl.gl.BufferData(
+                    gl::ARRAY_BUFFER,
+                    (vertices.len() * mem::size_of::<VertexData>()) as _,
+                    vertices.as_ptr() as _,
+                    gl::STREAM_DRAW,
+                );
+
+                gl.gl.DrawArrays(gl::TRIANGLES, 0, vertices.len() as _);
+
+                // gl.gl.ClearColor(1.0,
+                //     1.0,
+                //     0.7,
+                //     // XXX Not entirely sure what happens
+                //     // to the mask bit in fill_rect. No$
+                //     // seems to say that it's set to 0.
+                //     0.);
+                // gl.gl.Clear(gl::COLOR_BUFFER_BIT);
+
+                //ENDTEST
+
 
                 gl.gl.Finish();
             }
@@ -713,9 +816,11 @@ impl BackendRenderer for OpenGLRenderer {
         Ok(())
     }
 
+    //initialize renderer
     fn prepare_draw(&mut self, width: f32, height: f32) -> GameResult {
         if let Some((_, gl)) = self.get_context() {
             unsafe {
+                //check and resize surf_texture as needed
                 let (width_u, height_u) = (width as u32, height as u32);
                 if self.render_data.last_size != (width_u, height_u) {
                     self.render_data.last_size = (width_u, height_u);
@@ -734,9 +839,11 @@ impl BackendRenderer for OpenGLRenderer {
                         null() as _,
                     );
 
+                    //release
                     gl.gl.BindTexture(gl::TEXTURE_2D, 0 as _);
                 }
 
+                //clear out old framebuffer's data
                 gl.gl.BindFramebuffer(gl::FRAMEBUFFER, self.render_data.surf_framebuffer);
                 gl.gl.ClearColor(0.0, 0.0, 0.0, 0.0);
                 gl.gl.Clear(gl::COLOR_BUFFER_BIT);
@@ -744,9 +851,10 @@ impl BackendRenderer for OpenGLRenderer {
                 gl.gl.ActiveTexture(gl::TEXTURE0);
                 gl.gl.BlendEquation(gl::FUNC_ADD);
                 gl.gl.BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
-
+                //resize framebuffer texture
                 gl.gl.Viewport(0, 0, width_u as _, height_u as _);
 
+                //transform shader matricies to match new size
                 self.def_matrix = [
                     [2.0 / width, 0.0, 0.0, 0.0],
                     [0.0, 2.0 / -height, 0.0, 0.0],
@@ -780,6 +888,7 @@ impl BackendRenderer for OpenGLRenderer {
                     gl::FALSE,
                     self.curr_matrix.as_ptr() as _,
                 );
+
             }
 
             Ok(())
@@ -788,6 +897,7 @@ impl BackendRenderer for OpenGLRenderer {
         }
     }
 
+    //create empty texture that can be drawn to
     fn create_texture_mutable(&mut self, width: u16, height: u16) -> GameResult<Box<dyn BackendTexture>> {
         if let Some((_, gl)) = self.get_context() {
             unsafe {
@@ -812,23 +922,28 @@ impl BackendRenderer for OpenGLRenderer {
 
                 gl.gl.BindTexture(gl::TEXTURE_2D, current_texture_id);
 
+                //create new framebuffer
                 let framebuffer_id = return_param(|x| gl.gl.GenFramebuffers(1, x));
 
+                //tie framebuffer to texture (rendering to the framebuffer will renter to this texture)
                 gl.gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_id);
                 gl.gl.FramebufferTexture2D(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::TEXTURE_2D, texture_id, 0);
                 let draw_buffers = [gl::COLOR_ATTACHMENT0];
                 gl.gl.DrawBuffers(1, draw_buffers.as_ptr() as _);
 
+                //set the size of the new texture ("viewport" because this is a framebuffer)
                 gl.gl.Viewport(0, 0, width as _, height as _);
                 gl.gl.ClearColor(0.0, 0.0, 0.0, 0.0);
                 gl.gl.Clear(gl::COLOR_BUFFER_BIT);
+
+                //release framebuffer
                 gl.gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
 
                 // todo error checking: glCheckFramebufferStatus()
 
                 Ok(Box::new(OpenGLTexture {
                     texture_id,
-                    framebuffer_id,
+                    framebuffer_id, //use this to update texture's contents
                     width,
                     height,
                     vertices: Vec::new(),
@@ -842,6 +957,7 @@ impl BackendRenderer for OpenGLRenderer {
         }
     }
 
+    //create filled texture that cannot be drawn to
     fn create_texture(&mut self, width: u16, height: u16, data: &[u8]) -> GameResult<Box<dyn BackendTexture>> {
         if let Some((_, gl)) = self.get_context() {
             unsafe {
@@ -851,6 +967,7 @@ impl BackendRenderer for OpenGLRenderer {
                 gl.gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as _);
                 gl.gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as _);
 
+                //new texture, but this time, fill with image data
                 gl.gl.TexImage2D(
                     gl::TEXTURE_2D,
                     0,
@@ -867,7 +984,7 @@ impl BackendRenderer for OpenGLRenderer {
 
                 Ok(Box::new(OpenGLTexture {
                     texture_id,
-                    framebuffer_id: 0,
+                    framebuffer_id: 0, //no way to write to the texture
                     width,
                     height,
                     vertices: Vec::new(),
@@ -881,6 +998,7 @@ impl BackendRenderer for OpenGLRenderer {
         }
     }
 
+    //gl blend mode toggles
     fn set_blend_mode(&mut self, blend: BlendMode) -> GameResult {
         if let Some((_, gl)) = self.get_context() {
             match blend {
@@ -910,15 +1028,19 @@ impl BackendRenderer for OpenGLRenderer {
         }
     }
 
+    //when doing a draw operation, this will push the blit data to some texture instead of the screen
+    //if fed null, it will blit the data to self.render_data.surf_framebuffer
     fn set_render_target(&mut self, texture: Option<&Box<dyn BackendTexture>>) -> GameResult {
         if let Some((_, gl)) = self.get_context() {
             unsafe {
+                //check to make sure the texture fed in is the correct type
                 if let Some(texture) = texture {
                     let gl_texture = texture
                         .as_any()
                         .downcast_ref::<OpenGLTexture>()
                         .ok_or_else(|| RenderError("This texture was not created by OpenGL backend.".to_string()))?;
 
+                    //what is this matrix stuff for? (enable/disable/relocate shaders?)
                     self.curr_matrix = [
                         [2.0 / (gl_texture.width as f32), 0.0, 0.0, 0.0],
                         [0.0, 2.0 / (gl_texture.height as f32), 0.0, 0.0],
@@ -949,9 +1071,15 @@ impl BackendRenderer for OpenGLRenderer {
                         self.curr_matrix.as_ptr() as _,
                     );
 
+                    //target is now the input of whatever texture we wanted to target (read-only textures have a bufferID of 0, default)
                     gl.gl.BindFramebuffer(gl::FRAMEBUFFER, gl_texture.framebuffer_id);
                     gl.gl.Viewport(0, 0, gl_texture.width as _, gl_texture.height as _);
+
+
                 } else {
+                    //was fed incorrect framebuffer/'None'
+
+                    //remap shaders to default framebuffer
                     self.curr_matrix = self.def_matrix;
 
                     gl.gl.UseProgram(self.render_data.fill_shader.program_id);
@@ -976,6 +1104,8 @@ impl BackendRenderer for OpenGLRenderer {
                         gl::FALSE,
                         self.curr_matrix.as_ptr() as _,
                     );
+
+                    //re-target the render_data object's framebuffer
                     gl.gl.BindFramebuffer(gl::FRAMEBUFFER, self.render_data.surf_framebuffer);
                     gl.gl.Viewport(0, 0, self.render_data.last_size.0 as _, self.render_data.last_size.1 as _);
                 }
@@ -987,11 +1117,12 @@ impl BackendRenderer for OpenGLRenderer {
         }
     }
 
+
     fn draw_rect(&mut self, rect: Rect<isize>, color: Color) -> GameResult {
         unsafe {
             if let Some(gl) = &GL_PROC {
                 let color = color.to_rgba();
-                let mut uv = self.render_data.font_tex_size;
+                let mut uv = self.render_data.font_tex_size; //there seems to be no point to this (0/anything=0)
                 uv.0 = 0.0 / uv.0;
                 uv.1 = 0.0 / uv.1;
 
@@ -1004,6 +1135,7 @@ impl BackendRenderer for OpenGLRenderer {
                     VertexData { position: (rect.right as _, rect.bottom as _), uv, color },
                 ];
 
+
                 self.render_data.fill_shader.bind_attrib_pointer(gl, self.render_data.vbo);
 
                 gl.gl.BindTexture(gl::TEXTURE_2D, self.render_data.font_texture);
@@ -1015,8 +1147,10 @@ impl BackendRenderer for OpenGLRenderer {
                     gl::STREAM_DRAW,
                 );
 
+                //draw to currently bound framebuffer
                 gl.gl.DrawArrays(gl::TRIANGLES, 0, vertices.len() as _);
 
+                //release texture attribut bindings
                 gl.gl.BindTexture(gl::TEXTURE_2D, 0);
                 gl.gl.BindBuffer(gl::ARRAY_BUFFER, 0);
 
@@ -1199,6 +1333,7 @@ impl BackendRenderer for OpenGLRenderer {
         true
     }
 
+    //pass off to the openGLrender implementation
     fn draw_triangle_list(
         &mut self,
         vertices: &[VertexData],
@@ -1225,6 +1360,7 @@ impl OpenGLRenderer {
             return Ok(());
         }
 
+        //get ID of the ted texture (source)
         let texture_id = if let Some(texture) = texture {
             let gl_texture = texture
                 .as_any()
@@ -1271,6 +1407,7 @@ impl OpenGLRenderer {
                 gl::STREAM_DRAW,
             );
 
+            //draw to current framebuffer target
             gl.gl.DrawArrays(vert_type, 0, vertices.len() as _);
 
             gl.gl.BindTexture(gl::TEXTURE_2D, 0);
@@ -1281,6 +1418,14 @@ impl OpenGLRenderer {
             Err(RenderError("No OpenGL context available!".to_string()))
         }
     }
+
+
+
+
+
+
+
+
 }
 
 impl Drop for OpenGLRenderer {

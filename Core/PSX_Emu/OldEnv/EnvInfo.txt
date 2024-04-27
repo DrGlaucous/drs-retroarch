@@ -1,0 +1,17 @@
+For info on switching environments:
+https://aabdelfattah.me/2023/01/16/how-to-downgrade-rust-compiler-to-a-specific-version/
+
+Version that is known to work with this repo:
+rustc 1.28.0 (9634041f0 2018-07-30)
+
+
+see versions:
+rustup toolchain list
+set versions:
+rustup default <versionname>
+
+
+
+
+
+

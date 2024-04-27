@@ -10,19 +10,11 @@
 /// Callback typedefs are altered in the same way and suffixed with
 /// `Fn` for clarity.
 
-extern crate libc;
-
 use std::ptr;
 use std::ffi::{CStr, CString};
-//use std::ffi::{c_void, c_char, c_uint, c_float, c_double, c_size_t as size_t, c_int16_t as int16_t};
-use libc::{c_void, c_char, c_uint, c_float, c_double, size_t};
+use libc::{c_void, c_char, c_uint, c_float, c_double, size_t, int16_t};
 use std::path::PathBuf;
 use std::panic;
-
-
-extern crate log as rlog;
-
-use crate::core;
 
 pub trait Context {
     /// Get the system's audio and video parameters
@@ -56,18 +48,18 @@ pub trait Context {
 /// the pointer doesn't actually point to anything and is never
 /// dereferenced. It cannot be 0 however, since that would be a NULL
 /// pointer.
-static mut STATIC_CONTEXT: *mut dyn Context = 1 as *mut dummy::Context;
+static mut STATIC_CONTEXT: *mut Context = 1 as *mut dummy::Context;
 
-unsafe fn set_context(context: Box<dyn Context>) {
+unsafe fn set_context(context: Box<Context>) {
     STATIC_CONTEXT = Box::into_raw(context);
 }
 
 unsafe fn drop_context() {
-    _ = Box::from_raw(STATIC_CONTEXT);
+    Box::from_raw(STATIC_CONTEXT);
     STATIC_CONTEXT = &mut dummy::Context;
 }
 
-fn context() -> &'static mut dyn Context {
+fn context() -> &'static mut Context {
     unsafe {
         &mut *STATIC_CONTEXT
     }
@@ -112,10 +104,10 @@ pub type VideoRefreshFn =
                          height: c_uint,
                          pitch: size_t);
 pub type AudioSampleFn =
-    extern "C" fn(left: i16, right: i16);
+    extern "C" fn(left: int16_t, right: int16_t);
 
 pub type AudioSampleBatchFn =
-    unsafe extern "C" fn(data: *const i16,
+    unsafe extern "C" fn(data: *const int16_t,
                          frames: size_t) -> size_t;
 
 pub type InputPollFn = extern "C" fn();
@@ -124,7 +116,7 @@ pub type InputStateFn =
     extern "C" fn(port: c_uint,
                   device: c_uint,
                   index: c_uint,
-                  id:c_uint) -> i16;
+                  id:c_uint) -> int16_t;
 
 #[repr(C)]
 pub struct GameInfo {
@@ -385,7 +377,6 @@ pub mod hw_context {
         super::context().gl_context_destroy();
     }
 
-    //these callbacks should be replaced by ones provided by the libretro context
     pub extern "C" fn dummy_get_current_framebuffer() -> uintptr_t {
         panic!("Called missing get_current_framebuffer callback");
     }
@@ -394,9 +385,8 @@ pub mod hw_context {
         panic!("Called missing get_proc_address callback");
     }
 
-    //default values for the STATIC_HW_CONTEXT
     static mut STATIC_HW_CONTEXT: RenderCallback = RenderCallback {
-        context_type: ContextType::OpenGl, //OpenGlCore,
+        context_type: ContextType::OpenGlCore,
         context_reset: reset,
         // Filled by frontend
         get_current_framebuffer: dummy_get_current_framebuffer,
@@ -415,11 +405,10 @@ pub mod hw_context {
     pub fn init() -> bool {
         unsafe {
             call_environment_mut(Environment::SetHwRender,
-                &mut STATIC_HW_CONTEXT)
+                                 &mut STATIC_HW_CONTEXT)
         }
     }
 
-    //these dip into the onboard static struct and expose these process addresses in a safe manner
     pub fn get_proc_address(sym: &str) -> *const c_void {
         // OpenGL symbols should never contain \0 or something's very
         // wrong.
@@ -437,7 +426,6 @@ pub mod hw_context {
     }
 }
 
-//push messages to the frontend
 pub mod log {
     use super::{call_environment_mut, Environment};
     use std::ffi::CString;
@@ -525,18 +513,16 @@ pub mod log {
 // Libretro callbacks loaded by the frontend
 //*******************************************
 
-//by default, these are populated with panic functions
 static mut VIDEO_REFRESH: VideoRefreshFn = dummy::video_refresh;
 static mut INPUT_POLL: InputPollFn = dummy::input_poll;
 static mut INPUT_STATE: InputStateFn = dummy::input_state;
 static mut AUDIO_SAMPLE_BATCH: AudioSampleBatchFn = dummy::audio_sample_batch;
-static mut ENVIRONMENT: EnvironmentFn = dummy::environment; //raw environment command interface
+static mut ENVIRONMENT: EnvironmentFn = dummy::environment;
 
 //*******************************
 // Higher level helper functions
 //*******************************
 
-//notify that the game has finished rendering a single frame
 pub fn gl_frame_done(width: u32, height: u32) {
     unsafe {
         // When using a hardware renderer we set the data pointer to
@@ -549,7 +535,6 @@ pub fn gl_frame_done(width: u32, height: u32) {
     }
 }
 
-//push out audio samples to the frontend
 pub fn send_audio_samples(samples: &[i16]) {
     if samples.len() & 1 != 0 {
         panic!("Received an odd number of audio samples!");
@@ -566,7 +551,6 @@ pub fn send_audio_samples(samples: &[i16]) {
     }
 }
 
-//check if a button is pressed
 pub fn button_pressed(port: u8, b: JoyPadButton) -> bool {
     unsafe {
         INPUT_STATE(port as c_uint,
@@ -576,7 +560,6 @@ pub fn button_pressed(port: u8, b: JoyPadButton) -> bool {
     }
 }
 
-//check if a key is pressed
 pub fn key_pressed(port: u8, k: Key) -> bool {
     unsafe {
         INPUT_STATE(port as c_uint,
@@ -586,13 +569,11 @@ pub fn key_pressed(port: u8, k: Key) -> bool {
     }
 }
 
-//get a path to the retroarch filesystem
 pub fn get_system_directory() -> Option<PathBuf> {
     let mut path: *const c_char = ptr::null();
 
     let success =
         unsafe {
-            //request system directory and set the path pointer to the result
             call_environment_mut(Environment::GetSystemDirectory,
                                  &mut path)
         };
@@ -605,7 +586,7 @@ pub fn get_system_directory() -> Option<PathBuf> {
         None
     }
 }
-//set pixel mix type
+
 pub fn set_pixel_format(format: PixelFormat) -> bool {
     let f = format as c_uint;
 
@@ -614,14 +595,12 @@ pub fn set_pixel_format(format: PixelFormat) -> bool {
     }
 }
 
-//tell the frontend what the window's shape (width/height) is
 pub fn set_geometry(geom: &GameGeometry) -> bool {
     unsafe {
         call_environment(Environment::SetGeometry, geom)
     }
 }
 
-//set geometry and timing info(FPS and audio sample definition)
 /// Can destroy the OpenGL context!
 pub unsafe fn set_system_av_info(av_info: &SystemAvInfo) -> bool {
     call_environment(Environment::SetSystemAvInfo, av_info)
@@ -644,7 +623,6 @@ pub fn set_message(nframes: u32, msg: &str) {
     }
 }
 
-//true if the user changed a setting since last call
 pub fn variables_need_update() -> bool {
     let mut needs_update = false;
 
@@ -661,21 +639,19 @@ pub fn variables_need_update() -> bool {
     needs_update
 }
 
-//tells the frontend what options are avalable to be changed in settings
 /// `variables` *must* end with a `{ NULL, NULL }` marker
 pub unsafe fn register_variables(variables: &[Variable]) -> bool {
     call_environment_slice(Environment::SetVariables, variables)
 }
 
-//send command to frontend where the input is a pointer that can be changed
 unsafe fn call_environment_mut<T>(which: Environment, var: &mut T) -> bool {
     ENVIRONMENT(which as c_uint, var as *mut _ as *mut c_void)
 }
-//send a command to the frontend where the input is a constant pointer that cannot be changed
+
 unsafe fn call_environment<T>(which: Environment, var: &T) -> bool {
     ENVIRONMENT(which as c_uint, var as *const _ as *mut c_void)
 }
-//send a command to the frontend where the input is an array of many things that cannot be changed
+
 unsafe fn call_environment_slice<T>(which: Environment, var: &[T]) -> bool {
     ENVIRONMENT(which as c_uint, var.as_ptr() as *const _ as *mut c_void)
 }
@@ -705,26 +681,21 @@ fn ptr_as_ref<'a, T>(v: *const T) -> Option<&'a T> {
 // Libretro entry points called by the frontend
 //**********************************************
 
-//these functions are exposed in the core's library to be poked by the frontend
-
-//tell the frontend what version of the API this is using
 #[no_mangle]
 pub extern "C" fn retro_api_version() -> c_uint {
     // We implement the version 1 of the API
     1
 }
 
-//the frontend will populate the command interface pointer with its own function
 #[no_mangle]
 pub extern "C" fn retro_set_environment(callback: EnvironmentFn) {
     unsafe {
         ENVIRONMENT = callback
     }
 
-    core::init_variables();
+    ::init_variables();
 }
 
-//ditto, for video
 #[no_mangle]
 pub extern "C" fn retro_set_video_refresh(callback: VideoRefreshFn) {
     unsafe {
@@ -732,12 +703,10 @@ pub extern "C" fn retro_set_video_refresh(callback: VideoRefreshFn) {
     }
 }
 
-//for now, we do not get individual samples, so this function does nothing
 #[no_mangle]
 pub extern "C" fn retro_set_audio_sample(_: AudioSampleFn) {
 }
 
-//we send out audio samples in batches, so we want the pointer to where batches are loaded in
 #[no_mangle]
 pub extern "C" fn retro_set_audio_sample_batch(callback: AudioSampleBatchFn) {
     unsafe {
@@ -745,7 +714,6 @@ pub extern "C" fn retro_set_audio_sample_batch(callback: AudioSampleBatchFn) {
     }
 }
 
-//running INPUT_POLL tells the frontend to check for inputs
 #[no_mangle]
 pub extern "C" fn retro_set_input_poll(callback: InputPollFn) {
     unsafe {
@@ -753,7 +721,6 @@ pub extern "C" fn retro_set_input_poll(callback: InputPollFn) {
     }
 }
 
-//get the callback that exposes the latest input states to the backend
 #[no_mangle]
 pub extern "C" fn retro_set_input_state(callback: InputStateFn) {
     unsafe {
@@ -761,7 +728,6 @@ pub extern "C" fn retro_set_input_state(callback: InputStateFn) {
     }
 }
 
-//things that run only one time when the core is first loaded
 static mut FIRST_INIT: bool = true;
 
 #[no_mangle]
@@ -772,30 +738,26 @@ pub extern "C" fn retro_init() {
 
     unsafe {
         if FIRST_INIT {
-            core::init();
+            ::init();
             FIRST_INIT = false;
         }
     }
 }
 
-//called when the core is unloaded (original author may have intended to reset pointers)
 #[no_mangle]
 pub extern "C" fn retro_deinit() {
     // XXX Should I reset the callbacks to the dummy implementations
     // here?
 }
 
-//informs frontend of library specs? or informs library of frontend specs?
-//ans: informs frontend of library specs
 #[no_mangle]
 pub extern "C" fn retro_get_system_info(info: *mut SystemInfo) {
-    let info = ptr_as_mut_ref(info).unwrap(); //cast pointer into something rust-friendly
+    let info = ptr_as_mut_ref(info).unwrap();
 
     // Strings must be static and, of course, 0-terminated
-    *info = core::SYSTEM_INFO; //set info to what we have already made
+    *info = ::SYSTEM_INFO;
 }
 
-//ditto, but about audio and video parameters
 #[no_mangle]
 pub extern "C" fn retro_get_system_av_info(info: *mut SystemAvInfo) {
     let info = ptr_as_mut_ref(info).unwrap();
@@ -803,36 +765,28 @@ pub extern "C" fn retro_get_system_av_info(info: *mut SystemAvInfo) {
     *info = context().get_system_av_info();
 }
 
-//does nothing but print what these are
 #[no_mangle]
 pub extern "C" fn retro_set_controller_port_device(_port: c_uint,
                                                    _device: c_uint) {
-    dbg!("port device: {} {}", _port, _device); //debug!
+    debug!("port device: {} {}", _port, _device);
 }
 
-//tell backend it needs to reset
 #[no_mangle]
 pub extern "C" fn retro_reset() {
     context().reset();
 }
 
-//called every ingame "tick"
 #[no_mangle]
 pub unsafe extern "C" fn retro_run() {
-    //get latest input states
     INPUT_POLL();
 
-    //grab backend runner (for d-rs, this is simply the backend, we need to impl context for it)
     let context = context();
 
-    //check for panics from the backend and catch them in r
     let r = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        //check if settings have been updated and change internal settings to match
         if variables_need_update() {
             context.refresh_variables();
         }
 
-        //draw video frame
         context.render_frame();
     }));
 
@@ -845,17 +799,14 @@ pub unsafe extern "C" fn retro_run() {
     }
 }
 
-//tell rust how big the save state will be
 #[no_mangle]
 pub extern "C" fn retro_serialize_size() -> size_t {
     context().serialize_size()
 }
 
-//save state
 #[no_mangle]
 pub extern "C" fn retro_serialize(data: *mut c_void,
                                   size: size_t) -> bool {
-    //cast pointer
     let data = unsafe {
         ::std::slice::from_raw_parts_mut(data as *mut u8, size)
     };
@@ -867,11 +818,9 @@ pub extern "C" fn retro_serialize(data: *mut c_void,
         *b = 0;
     }
 
-    //tell backend to handle save-stating
     context().serialize(data).is_ok()
 }
 
-//load a save state back
 #[no_mangle]
 pub extern "C" fn retro_unserialize(data: *const c_void,
                                     size: size_t) -> bool {
@@ -882,7 +831,6 @@ pub extern "C" fn retro_unserialize(data: *const c_void,
     context().unserialize(data).is_ok()
 }
 
-//handle cheats (not implemented here)
 #[no_mangle]
 pub extern "C" fn retro_cheat_reset() {
 }
@@ -893,14 +841,12 @@ pub fn retro_cheat_set(_index: c_uint,
                        _code: *const c_char) {
 }
 
-
 #[no_mangle]
 pub extern "C" fn retro_load_game(info: *const GameInfo) -> bool {
     let info = ptr_as_ref(info).unwrap();
 
     if info.path.is_null() {
-        rlog::warn!("No path in GameInfo!");
-        //warn!("No path in GameInfo!");
+        warn!("No path in GameInfo!");
         return false;
     }
 
@@ -912,7 +858,7 @@ pub extern "C" fn retro_load_game(info: *const GameInfo) -> bool {
             None => return false,
         };
 
-    match core::load_game(path) {
+    match ::load_game(path) {
         Some(c) => {
             unsafe {
                 set_context(c);
@@ -920,7 +866,7 @@ pub extern "C" fn retro_load_game(info: *const GameInfo) -> bool {
             true
         }
         None => {
-            rlog::warn!("Couldn't load game!");
+            error!("Couldn't load game!");
             false
         }
     }
@@ -958,7 +904,7 @@ pub mod dummy {
     //! to catch calls to those function in the function pointer has
     //! not yet been loaded.
 
-    use libc::{c_void, c_uint, size_t};
+    use libc::{c_void, c_uint, size_t, int16_t};
 
     pub unsafe extern "C" fn video_refresh(_: *const c_void,
                                        _: c_uint,
@@ -971,7 +917,7 @@ pub mod dummy {
         panic!("Called missing input_poll callback");
     }
 
-    pub unsafe extern "C" fn audio_sample_batch(_: *const i16,
+    pub unsafe extern "C" fn audio_sample_batch(_: *const int16_t,
                                                 _: size_t) -> size_t {
         panic!("Called missing audio_sample_batch callback");
     }
@@ -979,7 +925,7 @@ pub mod dummy {
     pub extern "C" fn input_state(_: c_uint,
                                   _: c_uint,
                                   _: c_uint,
-                                  _: c_uint) -> i16 {
+                                  _: c_uint) -> int16_t {
         panic!("Called missing input_state callback");
     }
 
@@ -1050,15 +996,14 @@ fn build_path(cstr: &CStr) -> Option<PathBuf> {
     // encoded
     match cstr.to_str() {
         Ok(s) => Some(PathBuf::from(s)),
-        Err(e) => {
-            rlog::error!("The frontend gave us an invalid path: {}",
-                   cstr.to_string_lossy()); //originally error! macro, is this a valid substitute?
+        Err(_) => {
+            error!("The frontend gave us an invalid path: {}",
+                   cstr.to_string_lossy());
             None
         }
     }
 }
 
-//sends a command to the environment to get some variable (settings?)
 pub unsafe fn get_variable<T, E>(var: &str,
                                  var_cstr: *const c_char,
                                  parser: fn (&str) -> Result<T, E>) -> T
@@ -1083,7 +1028,6 @@ pub unsafe fn get_variable<T, E>(var: &str,
     }
 }
 
-#[allow(unused_macros)]
 macro_rules! cstring {
     ($x:expr) => {
         concat!($x, '\0') as *const _ as *const c_char
@@ -1155,7 +1099,7 @@ macro_rules! libretro_variables {
                 };
 
                 if !ok {
-                    log::warn!("Failed to register variables"); //warn
+                    warn!("Failed to register variables");
                 }
             }
 
