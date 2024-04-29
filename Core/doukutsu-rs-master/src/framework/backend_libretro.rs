@@ -97,16 +97,16 @@ impl LibretroEventLoop {
 
         Ok(Box::new(event_loop))
     }
+
     //the stuff in run() before the loop
-    // pub fn init(&mut self)
-    // {
-    //     if let (Some(ctx), Some(game), Some(state_ref)) = (self.context.as_mut(), self.game.as_mut(), self.state_ref.as_mut())
-    //     {
-    //         *state_ref = unsafe { &mut *game.state.get() };
-    //         ctx.screen_size = (640.0, 480.0);
-    //         state_ref.handle_resize(ctx).unwrap();
-    //     }
-    // }
+    pub fn init(&mut self, state_ref: &mut SharedGameState, game: &mut Game, ctx: &mut Context)
+    {
+        //if let (Some(ctx), Some(game), Some(state_ref)) = (ctx.as_mut(), game.as_mut(), state_ref.as_mut())
+        {
+            ctx.screen_size = (640.0, 480.0);
+            state_ref.handle_resize(ctx).unwrap();
+        }
+    }
 
     //like run(), but called repeatedly
     pub fn update(&mut self, state_ref: &mut SharedGameState, game: &mut Game, ctx: &mut Context)
@@ -151,7 +151,7 @@ impl LibretroEventLoop {
 
 
         let mut imgui = imgui::Context::create();
-        imgui.io_mut().display_size = [320.0, 240.0];
+        imgui.io_mut().display_size = [640.0, 480.0];
         imgui.fonts().build_alpha8_texture();
 
 
@@ -218,6 +218,8 @@ impl LibretroEventLoop {
 
     
         let gl_context = GLContext { gles2_mode: false, is_sdl: false, get_proc_address, swap_buffers, get_current_buffer, user_data, ctx };
+        //let gl_context = GLContext { gles2_mode: false, is_sdl: false, get_proc_address, swap_buffers, user_data, ctx };
+
         //Err(super::error::GameError::CommandLineError(("Not Done Yet!".to_owned())))//=>{log::error!("not done yet!")}
         Ok(Box::new(OpenGLRenderer::new(gl_context, UnsafeCell::new(imgui))))
 

@@ -74,7 +74,7 @@ fn get_av_info(std: VideoClock, upscaling: u32) -> libretro::SystemAvInfo {
 
     // Maximum resolution supported by the PlayStation video
     // output is 640x480
-    let max_width = (320 * upscaling) as c_uint;
+    let max_width = (640 * upscaling) as c_uint;
     let max_height = (240 * upscaling) as c_uint;
 
     libretro::SystemAvInfo {
@@ -198,10 +198,9 @@ impl<'a>  Core<'a>  {
 		let nuvis = borrowed.as_mut().get_mut();
 
 
-		let (a,b) = bor_context.create_backend(nuvis, get_current_framebuffer, get_proc_address).unwrap();
+		let (a, mut b) = bor_context.create_backend(nuvis, get_current_framebuffer, get_proc_address).unwrap();
 
         let state_ref = unsafe {&mut *borrowed.state.get()};
-
 
         Ok(Core {
             backend: a,
@@ -236,8 +235,8 @@ impl<'a>  libretro::Context  for Core<'a>  {
 
         if !self.has_set_res {
             let geometry = libretro::GameGeometry {
-                base_width: 320 as c_uint,
-                base_height: 240 as c_uint,
+                base_width: 640 as c_uint,
+                base_height: 480 as c_uint,
                 // Max parameters are ignored by this call
                 max_width: 0,
                 max_height: 0,
@@ -247,6 +246,8 @@ impl<'a>  libretro::Context  for Core<'a>  {
 
             libretro::set_geometry(&geometry);
             self.has_set_res = true;
+
+            self.event_loop.init(self.state_ref, self.game.as_mut().get_mut(), &mut self.context);
         }
 
 
@@ -256,7 +257,7 @@ impl<'a>  libretro::Context  for Core<'a>  {
 
 
 
-        gl_frame_done(320, 240)
+        gl_frame_done(640, 480)
 
     }
 

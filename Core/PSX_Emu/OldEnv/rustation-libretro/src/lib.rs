@@ -749,9 +749,9 @@ impl libretro::Context for Context {
             // // First we draw the visible part of fb_out
             unsafe {
                 gl::Disable(gl::SCISSOR_TEST);
-                //gl::Disable(gl::DEPTH_TEST);
-                //gl::Disable(gl::BLEND);
-                //gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
+                gl::Disable(gl::DEPTH_TEST);
+                gl::Disable(gl::BLEND);
+                gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
             }
 
             // let (fb_x_start, fb_y_start) = self.config.display_top_left;

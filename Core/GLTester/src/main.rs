@@ -13,6 +13,9 @@ use gl::types::*;
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
+
+
+//"old" opengl 3.3 shaders:
 const VERTEX_SHADER_SOURCE: &str = r#"
     #version 330 core
     layout (location = 0) in vec3 aPos;
@@ -26,6 +29,24 @@ const FRAGMENT_SHADER_SOURCE: &str = r#"
     out vec4 FragColor;
     void main() {
         FragColor = vec4(1.0, 0.2, 0.0, 1.0); // Red color
+    }
+"#;
+
+
+
+//"new" opengl 2.1 shaders:
+const VERTEX_SHADER_SOURCE_11: &str = r#"
+    #version 110 //330 core
+    attribute vec3 aPos;
+    void main() {
+        gl_Position = vec4(aPos, 1.0);
+    }
+"#;
+
+const FRAGMENT_SHADER_SOURCE_11: &str = r#"
+    #version 110
+    void main() {
+        gl_FragColor = vec4(1.0, 0.2, 0.0, 1.0); // Red color
     }
 "#;
 
@@ -45,9 +66,10 @@ fn main() {
 
 
     let context = ContextBuilder::new()
+        .with_gl(GlRequest::Specific(Api::OpenGl, (2, 1)))
         //.with_gl_profile(GlProfile::Core)
         //.with_gl_debug_flag(false)
-        //.with_pixel_format(24, 8)
+        .with_pixel_format(24, 8)
         //.with_vsync(true)
         .build_windowed(window_builder, &event_loop)
         .unwrap();
@@ -93,10 +115,10 @@ fn main() {
         vert_shader = gl::CreateShader(gl::VERTEX_SHADER);
         frag_shader = gl::CreateShader(gl::FRAGMENT_SHADER);
     }
-    let vert_sources = [VERTEX_SHADER_SOURCE.as_ptr() as *const GLchar];
-    let frag_sources = [FRAGMENT_SHADER_SOURCE.as_ptr() as *const GLchar];
-    let vert_sources_len = [VERTEX_SHADER_SOURCE.len() as GLint - 1];
-    let frag_sources_len = [FRAGMENT_SHADER_SOURCE.len() as GLint - 1];
+    let vert_sources = [VERTEX_SHADER_SOURCE_11.as_ptr() as *const GLchar];
+    let frag_sources = [FRAGMENT_SHADER_SOURCE_11.as_ptr() as *const GLchar];
+    let vert_sources_len = [VERTEX_SHADER_SOURCE_11.len() as GLint - 1];
+    let frag_sources_len = [FRAGMENT_SHADER_SOURCE_11.len() as GLint - 1];
 
     let mut program_id: GLuint = 0;
     unsafe{
@@ -105,6 +127,23 @@ fn main() {
 
         gl::CompileShader(vert_shader);
         gl::CompileShader(frag_shader);
+
+        // //check status
+        // {
+        //     let mut max_length: GLint = 0;
+        //     let mut msg_length: GLsizei = 0;
+        //     gl::GetShaderiv(frag_shader, gl::INFO_LOG_LENGTH, (&mut max_length) as *mut _);
+        //     let mut data: Vec<u8> = vec![0; max_length as usize];
+        //     gl::GetShaderInfoLog(
+        //         frag_shader,
+        //         max_length as GLsizei,
+        //         (&mut msg_length) as *mut _,
+        //         data.as_mut_ptr() as *mut _,
+        //     );
+        //     let data = String::from_utf8_lossy(&data);
+        //     log::error!("Failed to compile shader {}: {}", frag_shader, data);
+        // }
+
 
         program_id = gl::CreateProgram();
         gl::AttachShader(program_id, vert_shader);
@@ -139,6 +178,7 @@ fn main() {
                     //         };
                     //     }
                     // }
+                    //log::info!("Pressed");
                     flip = !flip;
                 }
             },

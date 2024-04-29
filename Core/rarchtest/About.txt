@@ -1,0 +1,1 @@
+Absolutely skimped down version of the retroarch environment for the sole reason of getting *something* to draw onscreen besides a single color.

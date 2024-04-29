@@ -1,0 +1,39 @@
+
+
+
+
+Currently working:
+Screen draws
+Game timing
+
+
+
+
+
+Yet to add:
+V-sync
+keyboard/controller Input
+retroarch <-> d-rs setting sync
+audio output
+rescale support
+close core support (can halt/restart the core)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -31,19 +31,19 @@ pub const VERTICES: [f32; 9] = [
 ];
 
 
-const VERTEX_SHADER_SOURCE: &str = r#"
-    #version 330 core
-    layout (location = 0) in vec3 aPos;
+//"new" opengl 2.1 shaders:
+const VERTEX_SHADER_SOURCE_11: &str = r#"
+    //#version 110 //330 core
+    attribute vec3 aPos;
     void main() {
         gl_Position = vec4(aPos, 1.0);
     }
 "#;
 
-const FRAGMENT_SHADER_SOURCE: &str = r#"
-    #version 330 core
-    out vec4 FragColor;
+const FRAGMENT_SHADER_SOURCE_11: &str = r#"
+    //#version 110
     void main() {
-        FragColor = vec4(1.0, 0.2, 0.0, 1.0); // Red color
+        gl_FragColor = vec4(1.0, 0.2, 0.0, 1.0); // Red color
     }
 "#;
 
@@ -51,6 +51,19 @@ const FRAGMENT_SHADER_SOURCE: &str = r#"
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
+
+
+pub fn handle_err() {
+    
+    unsafe{
+        let err = gl::GetError();
+
+        if err != 0 {
+            log::error!("OpenGL error: {}", err);
+        }
+    }
+
+}
 
 
 ////////////////////////BACKEND CALLS
@@ -288,10 +301,10 @@ impl  Core  {
             vert_shader = gl::CreateShader(gl::VERTEX_SHADER);
             frag_shader = gl::CreateShader(gl::FRAGMENT_SHADER);
         }
-        let vert_sources = [VERTEX_SHADER_SOURCE.as_ptr() as *const GLchar];
-        let frag_sources = [FRAGMENT_SHADER_SOURCE.as_ptr() as *const GLchar];
-        let vert_sources_len = [VERTEX_SHADER_SOURCE.len() as GLint - 1];
-        let frag_sources_len = [FRAGMENT_SHADER_SOURCE.len() as GLint - 1];
+        let vert_sources = [VERTEX_SHADER_SOURCE_11.as_ptr() as *const GLchar];
+        let frag_sources = [FRAGMENT_SHADER_SOURCE_11.as_ptr() as *const GLchar];
+        let vert_sources_len = [VERTEX_SHADER_SOURCE_11.len() as GLint - 1];
+        let frag_sources_len = [FRAGMENT_SHADER_SOURCE_11.len() as GLint - 1];
     
         let mut program_id: GLuint = 0;
         unsafe{
@@ -307,6 +320,7 @@ impl  Core  {
             gl::LinkProgram(program_id);
     
             //gl::UseProgram(program_id);
+
     
         }
 
@@ -316,10 +330,11 @@ impl  Core  {
             gl::GenBuffers(1, &mut vbo);
             gl::GenVertexArrays(1, &mut vao);
             gl::BindVertexArray(vao);
+            gl::EnableVertexAttribArray(0);
+            gl::BindVertexArray(0);
             gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
             gl::BufferData(gl::ARRAY_BUFFER, (VERTICES.len() * std::mem::size_of::<GLfloat>()) as GLsizeiptr, VERTICES.as_ptr() as *const _, gl::STATIC_DRAW);
             gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 3 * std::mem::size_of::<GLfloat>() as GLsizei, std::ptr::null());
-            gl::EnableVertexAttribArray(0);
         }
 
         self.vao = vao;
@@ -370,6 +385,8 @@ impl  libretro::Context  for Core  {
 
 
 
+        handle_err();
+
 
         if !self.has_set_res {
             let geometry = libretro::GameGeometry {
@@ -403,6 +420,7 @@ impl  libretro::Context  for Core  {
         //let fbo = libretro::hw_context::get_current_framebuffer() as GLuint;
         self.bind_libretro_framebuffer();
         unsafe {
+            handle_err();
             // gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, fbo);
             // //gl::Viewport(0, 0, w as GLsizei, h as GLsizei);
             // gl::Viewport(0, 0, WIDTH as GLsizei, HEIGHT as GLsizei);
@@ -448,6 +466,7 @@ impl  libretro::Context  for Core  {
 
             //open
             gl::Disable(gl::SCISSOR_TEST);
+            gl::BindVertexArray(self.vao);
 
             //run
             gl::ClearColor(0.5,
@@ -481,9 +500,10 @@ impl  libretro::Context  for Core  {
             // gl::ActiveTexture(gl::TEXTURE0);
             // gl::BindTexture(gl::TEXTURE_2D, 0);
 
-            // gl::BindVertexArray(0);
+            gl::BindVertexArray(0);
             gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
             gl::LineWidth(1.);
+            handle_err();
 
 
         }

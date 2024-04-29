@@ -31,13 +31,13 @@ impl Context {
     pub fn new() -> Context {
         Context {
             headless: false,
-            size_hint: (640, 480),
+            size_hint: (640, 480), //(640, 480),
             filesystem: Filesystem::new(),
             renderer: None,
             gamepad_context: GamepadContext::new(),
             keyboard_context: KeyboardContext::new(),
-            real_screen_size: (320, 240),
-            screen_size: (320.0, 240.0),
+            real_screen_size: (640, 480),
+            screen_size: (640.0, 480.0),
             screen_insets: (0.0, 0.0, 0.0, 0.0),
             vsync_mode: VSyncMode::Uncapped,
         }

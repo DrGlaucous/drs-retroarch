@@ -359,6 +359,9 @@ pub mod hw_context {
         OpenGlCore = 3,
         OpenGlEs3 = 4,
         OpenGlEsVersion = 5,
+        Vulkan = 6,
+        Direct3D = 7,
+        Dummy,
     }
 
     #[repr(C)]
@@ -396,7 +399,7 @@ pub mod hw_context {
 
     //default values for the STATIC_HW_CONTEXT
     static mut STATIC_HW_CONTEXT: RenderCallback = RenderCallback {
-        context_type: ContextType::OpenGl, //OpenGlCore,
+        context_type: ContextType::OpenGlCore, //OpenGlCore,
         context_reset: reset,
         // Filled by frontend
         get_current_framebuffer: dummy_get_current_framebuffer,
@@ -405,8 +408,8 @@ pub mod hw_context {
         depth: false,
         stencil: false,
         bottom_left_origin: true,
-        version_major: 3,
-        version_minor: 3,
+        version_major: 3, //3, //note: setting this to 2:1 doesn't seem to get us a context that can take the 110 shaders
+        version_minor: 0, //3,
         cache_context: false,
         context_destroy: context_destroy,
         debug_context: false,
