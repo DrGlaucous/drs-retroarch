@@ -790,16 +790,6 @@ impl OpenGLRenderer {
         Some((&mut self.refs, gl))
     }
 
-    //returns current screenbuffer number if backend is libretro, otherwise, 0 for backends that use the swap method
-    fn get_screen_fb(&mut self) -> GLuint {
-        unsafe{
-            let fbo = if let Some((context, _)) = self.get_context() {
-                ((context.get_current_buffer))(&mut context.user_data)
-
-            } else {0} as GLuint;
-            fbo
-        }
-    }
 
 }
 
@@ -844,12 +834,16 @@ impl BackendRenderer for OpenGLRenderer {
                 //     gl);
                 
                 //Bind the output framebuffer provided by the frontend
-                let fbo = self.get_screen_fb();
+                //let fbo = self.get_screen_fb();
+                let fbo = if let Some((context, _)) = self.get_context() {
+                    ((context.get_current_buffer))(&mut context.user_data)
+    
+                } else {0} as GLuint;
 
 
                 gl.gl.BindFramebuffer(gl::FRAMEBUFFER, fbo);
 
-                gl.gl.Viewport(0, 0, (640) as GLsizei, (480) as GLsizei);
+                //gl.gl.Viewport(0, 0, (640) as GLsizei, (240) as GLsizei);
 
 
                 gl.gl.ClearColor(0.0, 0.0, 0.0, 1.0);

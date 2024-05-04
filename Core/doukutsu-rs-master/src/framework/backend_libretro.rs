@@ -37,6 +37,8 @@ use crate::framework::gl;
 use crate::game::shared_game_state::SharedGameState;
 use crate::game::Game;
 
+use super::keyboard::ScanCode;
+
 pub struct LibretroBackend;
 
 impl LibretroBackend {
@@ -98,15 +100,34 @@ impl LibretroEventLoop {
         Ok(Box::new(event_loop))
     }
 
-    //the stuff in run() before the loop
-    pub fn init(&mut self, state_ref: &mut SharedGameState, game: &mut Game, ctx: &mut Context)
-    {
-        //if let (Some(ctx), Some(game), Some(state_ref)) = (ctx.as_mut(), game.as_mut(), state_ref.as_mut())
-        {
-            ctx.screen_size = (640.0, 480.0);
-            state_ref.handle_resize(ctx).unwrap();
-        }
+
+    //destroy the context's renderer (because the frontend's environment has changed)
+    pub fn destroy_renderer(&self, state_ref: &mut SharedGameState, ctx: &mut Context) -> GameResult {
+        ctx.renderer = None;
+
+        //wipe all old textures
+        state_ref.texture_set.unload_all();
+
+        Ok(())
     }
+
+    //called on init and whenever the frontend's environment has changed (immediately after destroy_renderer)
+    pub fn rebuild_renderer(&self, state_ref: &mut SharedGameState, ctx: &mut Context, width: u32, height: u32) -> GameResult {
+        ctx.renderer = Some(self.new_renderer(ctx)?);
+        ctx.screen_size = (width as f32, height as f32);
+        
+        if let Some(renderer) = &ctx.renderer {
+            if let Ok(imgui) = renderer.imgui() {
+                imgui.io_mut().display_size = [ctx.screen_size.0, ctx.screen_size.1];
+            }
+        }
+
+
+        state_ref.handle_resize(ctx);
+
+        Ok(())
+    }
+
 
     //like run(), but called repeatedly
     pub fn update(&mut self, state_ref: &mut SharedGameState, game: &mut Game, ctx: &mut Context)
@@ -140,14 +161,23 @@ impl LibretroEventLoop {
     }
 
     //takes input from libretro callbacks and pushes it into the engine
-    fn update_input(&mut self, callbacks: &mut impl Callbacks)
+    pub fn update_input(&mut self, ctx: &mut Context, key_id: ScanCode, key_state: bool)
     {
-        let inputs_polled = callbacks.poll_inputs();
-
+        ctx.keyboard_context.set_key(key_id, key_state);
     } 
 
-    //congruent to new_renderer, except it takes extra arguments
-    pub fn new_renderer_nd(&self, ctx: *mut Context) -> GameResult<Box<dyn BackendRenderer>> {
+
+
+}
+
+//not really used, since there are many special functions inside the libretroEventLoop
+impl BackendEventLoop for LibretroEventLoop {
+
+    //run is unused. See update() instead
+    fn run(&mut self, _game: &mut Game, _ctx: &mut Context) { }
+
+    //initialize the renderers for imgui and main
+    fn new_renderer(&self, ctx: *mut Context) -> GameResult<Box<dyn BackendRenderer>> {
 
 
         let mut imgui = imgui::Context::create();
@@ -158,9 +188,6 @@ impl LibretroEventLoop {
         //test
         //let mut benders_shiny_metal_ass = (self.refs.borrow().get_current_framebuffer)();
         //let frys_face = benders_shiny_metal_ass + 1;
-
-
-
         //return Ok(Box::new(LibretroRenderer(RefCell::new(imgui))));
 
         //turn refs into a raw pointer
@@ -191,12 +218,7 @@ impl LibretroEventLoop {
         }
 
         unsafe fn swap_buffers(_user_data: &mut *mut c_void) {
-            // let refs = Rc::from_raw(*user_data as *mut RefCell<LibretroContext>);
-            // {
-            //     let refs = &mut *refs.as_ptr();//*refs.get();
-            //     let cur_fb = (refs.get_current_framebuffer)();
-            // }
-            // *user_data = Rc::into_raw(refs) as *mut c_void;
+            //libretro doesn't use this: do nothing
         }
 
         unsafe fn get_current_buffer(user_data: &mut *mut c_void) -> usize {
@@ -214,109 +236,11 @@ impl LibretroEventLoop {
         }
 
 
-
-
-    
         let gl_context = GLContext { gles2_mode: false, is_sdl: false, get_proc_address, swap_buffers, get_current_buffer, user_data, ctx };
         //let gl_context = GLContext { gles2_mode: false, is_sdl: false, get_proc_address, swap_buffers, user_data, ctx };
 
         //Err(super::error::GameError::CommandLineError(("Not Done Yet!".to_owned())))//=>{log::error!("not done yet!")}
         Ok(Box::new(OpenGLRenderer::new(gl_context, UnsafeCell::new(imgui))))
-
-    }
-
-
-
-
-}
-
-//not really used, since there are many special functions inside the libretroEventLoop
-impl BackendEventLoop for LibretroEventLoop {
-
-    //called one time, normally loops indefinitely inside, but must return immeadiately for this core type (is unused here: see update())
-    fn run(&mut self, _game: &mut Game, _ctx: &mut Context) {
-        // let state_ref = unsafe { &mut *game.state.get() };
-
-        // ctx.screen_size = (640.0, 480.0);
-        // state_ref.handle_resize(ctx).unwrap();
-
-        // loop {
-        //     game.update(ctx).unwrap();
-
-        //     if state_ref.shutdown {
-        //         log::info!("Shutting down...");
-        //         break;
-        //     }
-
-        //     if state_ref.next_scene.is_some() {
-        //         mem::swap(&mut game.scene, &mut state_ref.next_scene);
-        //         state_ref.next_scene = None;
-        //         game.scene.as_mut().unwrap().init(state_ref, ctx).unwrap();
-        //         game.loops = 0;
-        //         state_ref.frame_time = 0.0;
-        //     }
-        //     std::thread::sleep(std::time::Duration::from_millis(10));
-
-        //     game.draw(ctx).unwrap();
-        // }
-
-
-    }
-
-    //initialize imgui renderer (and main renderer)
-    fn new_renderer(&self, _ctx: *mut Context) -> GameResult<Box<dyn BackendRenderer>> {
-        let mut imgui = imgui::Context::create();
-        imgui.io_mut().display_size = [640.0, 480.0];
-        imgui.fonts().build_alpha8_texture();
-
-        return Ok(Box::new(LibretroRenderer(RefCell::new(imgui))));
-
-
-        //load example:
-        //let gl = gl::Gles2::load_with(|ptr| (gl_context.get_proc_address)(&mut gl_context.user_data, ptr));
-
-
-        //function to use in order to refresh the buffer
-
-        //these are responsible for turning a data dump over user_data into 
-        unsafe fn get_proc_address(user_data: &mut *mut c_void, name: &str) -> *const c_void {
-            let refs = Rc::from_raw(*user_data as *mut UnsafeCell<Option<LibretroEventLoop>>);
-
-            let result = {
-                let refs = &mut *refs.get();
-
-                if let Some(refs) = refs {
-                    //refs.get_proc_address(name)
-                } else {
-                    //std::ptr::null()
-                }
-                std::ptr::null()
-            };
-
-            *user_data = Rc::into_raw(refs) as *mut c_void;
-
-            result
-        }
-
-        unsafe fn swap_buffers(user_data: &mut *mut c_void) {
-            let refs = Rc::from_raw(*user_data as *mut UnsafeCell<Option<LibretroEventLoop>>);
-
-            {
-                let refs = &mut *refs.get();
-
-                if let Some(refs) = refs {
-                    //refs.swap_buffers();
-                }
-            }
-
-            *user_data = Rc::into_raw(refs) as *mut c_void;
-        }
-
-
-    
-        //let gl_context = GLContext { gles2_mode: true, is_sdl: false, get_proc_address, swap_buffers, user_data, ctx };
-        //Err(super::error::GameError::CommandLineError(("Not Done Yet!".to_owned())))//=>{log::error!("not done yet!")}
-        //Ok(Box::new(OpenGLRenderer::new(gl_context, UnsafeCell::new(imgui))))
 
     }
 

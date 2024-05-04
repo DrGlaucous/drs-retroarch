@@ -22,6 +22,7 @@ impl FilesystemContainer {
         Self { user_path: PathBuf::new(), game_path: PathBuf::new(), is_portable: false }
     }
 
+    //todo: pass correct libretro path into here (or fake libretro filesystem)
     pub fn mount_fs(&mut self, context: &mut Context) -> GameResult {
         #[cfg(not(any(target_os = "android", target_os = "horizon")))]
         let resource_dir = if let Ok(data_dir) = std::env::var("CAVESTORY_DATA_DIR") {

@@ -31,7 +31,7 @@ impl Context {
     pub fn new() -> Context {
         Context {
             headless: false,
-            size_hint: (640, 480), //(640, 480),
+            size_hint: (640, 480),
             filesystem: Filesystem::new(),
             renderer: None,
             gamepad_context: GamepadContext::new(),
@@ -54,21 +54,22 @@ impl Context {
     }
 
     #[cfg(feature = "backend-libretro")]
-    pub fn create_backend(&mut self, game: &mut Game,
+    pub fn create_backend(&mut self, _game: &mut Game,
         get_current_framebuffer: fn() -> usize,
         get_proc_address: fn(&str) -> *const c_void,
     ) -> GameResult<(Box<LibretroBackend>, Box<LibretroEventLoop>)> {
-        // let backend = init_backend(self.headless, self.size_hint)?; //don't need, backend just used for creating event loop
-        // let mut event_loop = backend.create_event_loop(self)?; //don't need, event loop is already created in a higher layer
-        // self.renderer = Some(event_loop.new_renderer(self as *mut Context)?); //do need, is used for imgui rendering
 
-        //force libretro type (no dyns)
+        //force libretro type (no dyns) (could also use downcasting...)
         let backend = LibretroBackend::new_nd()?;
         let mut event_loop = backend.create_event_loop_nd(self, get_current_framebuffer, get_proc_address)?;
-        self.renderer = Some(event_loop.new_renderer_nd(self as *mut Context)?);
+        
+        //we break this out as libretro requires it.
+        //self.renderer = Some(event_loop.new_renderer(self as *mut Context)?);
 
 
         Ok((backend, event_loop))
     }
+
+
 
 }

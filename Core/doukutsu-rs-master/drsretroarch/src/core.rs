@@ -12,11 +12,12 @@ use std::ffi::c_void;
 //use doukutsu_rs::framework::backend::BackendEventLoop;
 use doukutsu_rs::framework::backend_libretro::{LibretroEventLoop, LibretroBackend};
 use doukutsu_rs::framework::backend::{BackendEventLoop, Backend};
+use doukutsu_rs::framework::keyboard::ScanCode;
 use doukutsu_rs::framework::context::{self, Context};
 use doukutsu_rs::game::Game;
 use doukutsu_rs::game::shared_game_state::SharedGameState;
 
-use crate::libretro::{self, gl_frame_done};
+use crate::libretro::{self, gl_frame_done, Key, key_pressed};
 
 /// Static system information sent to the frontend on request
 pub const SYSTEM_INFO: libretro::SystemInfo = libretro::SystemInfo {
@@ -27,7 +28,8 @@ pub const SYSTEM_INFO: libretro::SystemInfo = libretro::SystemInfo {
     block_extract: false,
 };
 
-
+pub const WIDTH: u32 = 640;
+pub const HEIGHT: u32 = 240; 
 
 ////////////////////////BACKEND CALLS
 
@@ -58,24 +60,14 @@ pub enum VideoClock {
     Pal,
 }
 
-fn video_output_framerate(std: VideoClock) -> f32 {
-    match std {
-        // 53.690MHz GPU clock frequency, 263 lines per field,
-        // 3413 cycles per line
-        VideoClock::Ntsc => 60.0,
-        // 53.222MHz GPU clock frequency, 314 lines per field,
-        // 3406 cycles per line
-        VideoClock::Pal => 50.0,
-    }
-}
 
 //get the current state of the backend's video settings (placeholder for now...)
-fn get_av_info(std: VideoClock, upscaling: u32) -> libretro::SystemAvInfo {
+fn get_av_info(fps: f32, upscaling: u32) -> libretro::SystemAvInfo {
 
     // Maximum resolution supported by the PlayStation video
     // output is 640x480
-    let max_width = (640 * upscaling) as c_uint;
-    let max_height = (240 * upscaling) as c_uint;
+    let max_width = (WIDTH * upscaling) as c_uint;
+    let max_height = (HEIGHT * upscaling) as c_uint;
 
     libretro::SystemAvInfo {
         geometry: libretro::GameGeometry {
@@ -86,10 +78,10 @@ fn get_av_info(std: VideoClock, upscaling: u32) -> libretro::SystemAvInfo {
             base_height: max_height,
             max_width: max_width,
             max_height: max_height,
-            aspect_ratio: 4./3.,
+            aspect_ratio: (max_width as f32)/(max_height as f32),
         },
         timing: libretro::SystemTiming {
-            fps: video_output_framerate(std) as f64,
+            fps: fps as f64,
             sample_rate: 44_100.
         }
     }
@@ -198,26 +190,32 @@ impl<'a>  Core<'a>  {
 		let nuvis = borrowed.as_mut().get_mut();
 
 
-		let (a, mut b) = bor_context.create_backend(nuvis, get_current_framebuffer, get_proc_address).unwrap();
+		let (a, b) = bor_context.create_backend(nuvis, get_current_framebuffer, get_proc_address).unwrap();
 
         let state_ref = unsafe {&mut *borrowed.state.get()};
 
         Ok(Core {
             backend: a,
             event_loop: b,
-            ////data_path: data.clone().to_path_buf(), 
+            context: bor_context,
 
             state_ref: state_ref,
             game: borrowed,
-            context: bor_context,
             has_set_res: false
+
+            ////data_path: data.clone().to_path_buf(), 
         
         
         })
         
     }
 
-
+    fn poll_keys(&mut self) {
+        
+        for (ret_key, drs_key) in BUTTON_MAP {
+            self.event_loop.update_input(&mut self.context, drs_key, key_pressed(0, ret_key));
+        }
+    }
 
 }
 
@@ -227,28 +225,29 @@ impl<'a>  libretro::Context  for Core<'a>  {
     fn render_frame(&mut self) {
 
 
-        let mut benders_shiny_metal_ass = 0;
-        let frys_face = benders_shiny_metal_ass + 1;
-        if frys_face & 1 > 0 {
-            benders_shiny_metal_ass = 3;
-        }
+        self.poll_keys();
 
-        if !self.has_set_res {
-            let geometry = libretro::GameGeometry {
-                base_width: 640 as c_uint,
-                base_height: 480 as c_uint,
-                // Max parameters are ignored by this call
-                max_width: 0,
-                max_height: 0,
-                // Is this accurate?
-                aspect_ratio: 4./3.,
-            };
 
-            libretro::set_geometry(&geometry);
-            self.has_set_res = true;
+        // let mut benders_shiny_metal_ass = 0;
+        // let frys_face = benders_shiny_metal_ass + 1;
+        // if frys_face & 1 > 0 {
+        //     benders_shiny_metal_ass = 3;
+        // }
 
-            self.event_loop.init(self.state_ref, self.game.as_mut().get_mut(), &mut self.context);
-        }
+        // if !self.has_set_res {
+        //     let geometry = libretro::GameGeometry {
+        //         base_width: WIDTH as c_uint,
+        //         base_height: HEIGHT as c_uint,
+        //         // Max parameters are ignored by this call
+        //         max_width: 0,
+        //         max_height: 0,
+        //         // Is this accurate?
+        //         aspect_ratio: (WIDTH as f32)/(HEIGHT as f32),
+        //     };
+        //     libretro::set_geometry(&geometry);
+        //     self.has_set_res = true;
+        //     //self.event_loop.init(self.state_ref, self.game.as_mut().get_mut(), &mut self.context);
+        // }
 
 
 
@@ -257,41 +256,46 @@ impl<'a>  libretro::Context  for Core<'a>  {
 
 
 
-        gl_frame_done(640, 480)
+        gl_frame_done(WIDTH, HEIGHT)
 
     }
 
+    //tell frontend what audio and video parameters to use
     fn get_system_av_info(&self) -> libretro::SystemAvInfo {
         let upscaling = 2 as u32;
 
-        get_av_info(VideoClock::Pal, upscaling)
+        get_av_info(60.0, upscaling)
     }
 
+    //settings have been changed, update them inside the game
     fn refresh_variables(&mut self){
 
     }
 
+    //soft-reset (gl is not re-initialized, send game back to top menu)
     fn reset(&mut self) {
 
     }
 
+    //gl context was destroyed, now rebuild it (called when game is initialized).
     fn gl_context_reset(&mut self){
-
+        let _ = self.event_loop.rebuild_renderer(self.state_ref, &mut self.context, WIDTH, HEIGHT);
     }
 
+    //called when frontend window resolution is changed,
+    //the gl context is about to be destroyed, remove anything from the back while you can
     fn gl_context_destroy(&mut self){
-
+         let _ = self.event_loop.destroy_renderer(&mut self.state_ref, &mut self.context);
     }
 
     //todo: remove unused functions from Context
     fn serialize_size(&self) -> usize {
         0
     }
-
-    fn serialize(&self, mut buf: &mut [u8]) -> Result<(), ()> {
+    fn serialize(&self, mut _buf: &mut [u8]) -> Result<(), ()> {
         Ok(())
     }
-    fn unserialize(&mut self, mut buf: &[u8]) -> Result<(), ()> {
+    fn unserialize(&mut self, mut _buf: &[u8]) -> Result<(), ()> {
         Ok(())
     }
 
@@ -299,13 +303,109 @@ impl<'a>  libretro::Context  for Core<'a>  {
 }
 
 
+/////////////////////UTILS
 
-
-struct MinRender {
-
-}
-
-impl MinRender {
-
-}
-
+//need this static array to iterate over the enum:
+const BUTTON_MAP: [(Key, ScanCode); 101] = [
+    (Key::A, ScanCode::A),
+    (Key::B, ScanCode::B),
+    (Key::C, ScanCode::C),
+    (Key::D, ScanCode::D),
+    (Key::E, ScanCode::E),
+    (Key::F, ScanCode::F),
+    (Key::G, ScanCode::G),
+    (Key::H, ScanCode::H),
+    (Key::I, ScanCode::I),
+    (Key::J, ScanCode::J),
+    (Key::K, ScanCode::K),
+    (Key::L, ScanCode::L),
+    (Key::M, ScanCode::M),
+    (Key::N, ScanCode::N),
+    (Key::O, ScanCode::O),
+    (Key::P, ScanCode::P),
+    (Key::Q, ScanCode::Q),
+    (Key::R, ScanCode::R),
+    (Key::S, ScanCode::S),
+    (Key::T, ScanCode::T),
+    (Key::U, ScanCode::U),
+    (Key::V, ScanCode::V),
+    (Key::W, ScanCode::W),
+    (Key::X, ScanCode::X),
+    (Key::Y, ScanCode::Y),
+    (Key::Z, ScanCode::Z),
+    (Key::Num1, ScanCode::Key1),
+    (Key::Num2, ScanCode::Key2),
+    (Key::Num3, ScanCode::Key3),
+    (Key::Num4, ScanCode::Key4),
+    (Key::Num5, ScanCode::Key5),
+    (Key::Num6, ScanCode::Key6),
+    (Key::Num7, ScanCode::Key7),
+    (Key::Num8, ScanCode::Key8),
+    (Key::Num9, ScanCode::Key9),
+    (Key::Num0, ScanCode::Key0),
+    (Key::Return, ScanCode::Return),
+    (Key::Escape, ScanCode::Escape),
+    (Key::Backspace, ScanCode::Backspace),
+    (Key::Tab, ScanCode::Tab),
+    (Key::Space, ScanCode::Space),
+    (Key::Minus, ScanCode::Minus),
+    (Key::Equals, ScanCode::Equals),
+    (Key::LeftBracket, ScanCode::LBracket),
+    (Key::RightBracket, ScanCode::RBracket),
+    (Key::Backslash, ScanCode::Backslash),
+    (Key::Semicolon, ScanCode::Semicolon),
+    (Key::Comma, ScanCode::Comma),
+    (Key::Period, ScanCode::Period),
+    (Key::Slash, ScanCode::Slash),
+    (Key::CapsLock, ScanCode::Capslock),
+    (Key::F1, ScanCode::F1),
+    (Key::F2, ScanCode::F2),
+    (Key::F3, ScanCode::F3),
+    (Key::F4, ScanCode::F4),
+    (Key::F5, ScanCode::F5),
+    (Key::F6, ScanCode::F6),
+    (Key::F7, ScanCode::F7),
+    (Key::F8, ScanCode::F8),
+    (Key::F9, ScanCode::F9),
+    (Key::F10, ScanCode::F10),
+    (Key::F11, ScanCode::F11),
+    (Key::F12, ScanCode::F12),
+    (Key::Pause, ScanCode::Pause),
+    (Key::Insert, ScanCode::Insert),
+    (Key::Home, ScanCode::Home),
+    (Key::PageUp, ScanCode::PageUp),
+    (Key::Delete, ScanCode::Delete),
+    (Key::End, ScanCode::End),
+    (Key::PageDown, ScanCode::PageDown),
+    (Key::Right, ScanCode::Right),
+    (Key::Left, ScanCode::Left),
+    (Key::Down, ScanCode::Down),
+    (Key::Up, ScanCode::Up),
+    (Key::KpDivide, ScanCode::NumpadDivide),
+    (Key::KpMultiply, ScanCode::NumpadMultiply),
+    (Key::KpMinus, ScanCode::NumpadSubtract),
+    (Key::KpPlus, ScanCode::NumpadAdd),
+    (Key::KpEnter, ScanCode::NumpadEnter),
+    (Key::Kp1, ScanCode::Numpad1),
+    (Key::Kp2, ScanCode::Numpad2),
+    (Key::Kp3, ScanCode::Numpad3),
+    (Key::Kp4, ScanCode::Numpad4),
+    (Key::Kp5, ScanCode::Numpad5),
+    (Key::Kp6, ScanCode::Numpad6),
+    (Key::Kp7, ScanCode::Numpad7),
+    (Key::Kp8, ScanCode::Numpad8),
+    (Key::Kp9, ScanCode::Numpad9),
+    (Key::Kp0, ScanCode::Numpad0),
+    (Key::Power, ScanCode::Power),
+    (Key::KpEquals, ScanCode::NumpadEquals),
+    (Key::F13, ScanCode::F13),
+    (Key::F14, ScanCode::F14),
+    (Key::F15, ScanCode::F15),
+    (Key::SysReq, ScanCode::Sysrq),
+    (Key::LCtrl, ScanCode::LControl),
+    (Key::LShift, ScanCode::LShift),
+    (Key::LAlt, ScanCode::LAlt),
+    (Key::RCtrl, ScanCode::RControl),
+    (Key::RShift, ScanCode::RShift),
+    (Key::RAlt, ScanCode::RAlt),
+];
