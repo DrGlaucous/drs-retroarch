@@ -1,10 +1,12 @@
 use std::any::Any;
+use std::borrow::Borrow;
 use std::io;
 
 use crate::engine_constants::EngineConstants;
 use crate::framework::context::Context;
 use crate::framework::error::GameResult;
 use crate::game::settings::Settings;
+use crate::game::LaunchOptions;
 use crate::sound::pixtone::PixToneParameters;
 
 
@@ -26,8 +28,6 @@ pub enum InterpolationMode {
 }
 
 pub trait SoundManager {
-    //fn new(ctx: &mut Context) -> GameResult<dyn SoundManager>;
-
     fn reload(&mut self) -> GameResult<()>;
 
     fn pause(&mut self);
@@ -79,18 +79,24 @@ pub trait SoundManager {
 }
 
 #[allow(unreachable_code)]
-pub fn init_sound_backend(ctx: &mut Context) -> GameResult<Box<dyn SoundManager>> {
+pub fn init_sound_backend(ctx: &mut Context, launch_options: &mut LaunchOptions) -> GameResult<Box<dyn SoundManager>> {
+
+    if ctx.headless {
+        return crate::sound::backend_null::SoundManagerNull::new(ctx);
+    }
 
     #[cfg(feature = "backend-libretro")]
     {
-
+        return crate::sound::backend_libretro::SoundManagerLibretro::new(ctx, &mut launch_options.audio_config);
     }
 
-    //todo: move headless init outside of cpal sound manager
     #[cfg(feature = "audio-cpal")]
     {
         return crate::sound::backend_cpal::SoundManagerCpal::new(ctx);
     }
+
+
+    return crate::sound::backend_null::SoundManagerNull::new(ctx);
 
 
 }

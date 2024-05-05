@@ -16,8 +16,9 @@ use doukutsu_rs::framework::keyboard::ScanCode;
 use doukutsu_rs::framework::context::{self, Context};
 use doukutsu_rs::game::Game;
 use doukutsu_rs::game::shared_game_state::SharedGameState;
+use doukutsu_rs::sound::backend_libretro::{OutputBufConfig, Runner};
 
-use crate::libretro::{self, gl_frame_done, Key, key_pressed};
+use crate::libretro::{self, gl_frame_done, key_pressed, send_audio_samples, Key};
 
 /// Static system information sent to the frontend on request
 pub const SYSTEM_INFO: libretro::SystemInfo = libretro::SystemInfo {
@@ -82,7 +83,7 @@ fn get_av_info(fps: f32, upscaling: u32) -> libretro::SystemAvInfo {
         },
         timing: libretro::SystemTiming {
             fps: fps as f64,
-            sample_rate: 44_100.
+            sample_rate: 44_100. //samples per second
         }
     }
 }
@@ -157,7 +158,9 @@ struct Core<'a>  {
     pub game: Pin<Box<Game>>,
     pub context: Pin<Box<Context>>,	
 
-    has_set_res: bool,
+    async_audio_enabled: bool, //true if async audio has been enabled
+    delta_time: i64, //time since last frame
+    audio_runner: Runner, //object that containst the audio context
 }
 
 impl<'a>  Core<'a>  {
@@ -176,13 +179,35 @@ impl<'a>  Core<'a>  {
             return Err(());
         }
 
+        if !libretro::register_frame_time_callback(50) {
+            log::warn!("Failed to init delta frame counter");
+            return Err(());
+        }
+
+        let async_audio_enabled = if !libretro::async_audio_context::register_async_audio_callback() {
+            log::warn!("Failed to init async audio, falling back to synchronous");
+            false
+        } else {true};
+
+
         //function to use in order to get the current framebuffer
         let get_current_framebuffer: fn() -> usize = libretro::hw_context::get_current_framebuffer;
         let get_proc_address: fn(&str) -> *const c_void = libretro::hw_context::get_proc_address;
 
+        let mut audio_runner: Option<Runner> = None;
+        let sound_config = OutputBufConfig {
+            sample_rate: 44_100.0,
+            channel_count: 2,
+            runner_out: &mut audio_runner,
+        };
 
+        let options = doukutsu_rs::game::LaunchOptions {
+            server_mode: false,
+            editor: false,
+            return_types: true,
+            audio_config: sound_config,
+        };
 
-        let options = doukutsu_rs::game::LaunchOptions { server_mode: false, editor: false, return_types: true };
 		let (game, context) = doukutsu_rs::game::init(options).unwrap();
 
 		let mut bor_context = context.unwrap();
@@ -201,7 +226,9 @@ impl<'a>  Core<'a>  {
 
             state_ref: state_ref,
             game: borrowed,
-            has_set_res: false
+            async_audio_enabled,
+            delta_time: 0,
+            audio_runner: audio_runner.unwrap(),
 
             ////data_path: data.clone().to_path_buf(), 
         
@@ -215,6 +242,12 @@ impl<'a>  Core<'a>  {
         for (ret_key, drs_key) in BUTTON_MAP {
             self.event_loop.update_input(&mut self.context, drs_key, key_pressed(0, ret_key));
         }
+    }
+
+    fn run_audio(&mut self) {
+
+        self.audio_runner.run();
+        send_audio_samples(&self.audio_runner.data);
     }
 
 }
@@ -253,10 +286,15 @@ impl<'a>  libretro::Context  for Core<'a>  {
 
 
         self.event_loop.update(self.state_ref, self.game.as_mut().get_mut(), &mut self.context);
+        gl_frame_done(WIDTH, HEIGHT);
 
 
+        //run audio synchronously
+        if !self.async_audio_enabled {
+            self.run_audio();
+        }
 
-        gl_frame_done(WIDTH, HEIGHT)
+
 
     }
 
@@ -264,7 +302,7 @@ impl<'a>  libretro::Context  for Core<'a>  {
     fn get_system_av_info(&self) -> libretro::SystemAvInfo {
         let upscaling = 2 as u32;
 
-        get_av_info(60.0, upscaling)
+        get_av_info(50.0, upscaling)
     }
 
     //settings have been changed, update them inside the game
@@ -288,6 +326,18 @@ impl<'a>  libretro::Context  for Core<'a>  {
          let _ = self.event_loop.destroy_renderer(&mut self.state_ref, &mut self.context);
     }
 
+    fn elapse_time(&mut self, delta_time: i64) {
+        self.delta_time = delta_time;
+    }
+    fn async_audio_callback(&mut self) {
+        self.run_audio();
+    }
+    //not really needed at the moment...
+    fn async_audio_state(&mut self, _is_enabled: bool) {
+        
+    }
+
+
     //todo: remove unused functions from Context
     fn serialize_size(&self) -> usize {
         0
@@ -298,7 +348,6 @@ impl<'a>  libretro::Context  for Core<'a>  {
     fn unserialize(&mut self, mut _buf: &[u8]) -> Result<(), ()> {
         Ok(())
     }
-
 
 }
 

@@ -18,6 +18,7 @@ use crate::game::caret::{Caret, CaretType};
 use crate::game::npc::NPCTable;
 use crate::game::player::TargetPlayer;
 use crate::game::profile::GameProfile;
+use crate::game::LaunchOptions;
 #[cfg(feature = "scripting-lua")]
 use crate::game::scripting::lua::LuaScriptingState;
 use crate::game::scripting::tsc::credit_script::{CreditScript, CreditScriptVM};
@@ -352,9 +353,9 @@ pub struct SharedGameState {
 }
 
 impl SharedGameState {
-    pub fn new(ctx: &mut Context) -> GameResult<SharedGameState> {
+    pub fn new(ctx: &mut Context, launch_options: &mut LaunchOptions) -> GameResult<SharedGameState> {
         let mut constants = EngineConstants::defaults();
-        let mut sound_manager = init_sound_backend(ctx)?; //SoundManager::new(ctx)?;
+        let mut sound_manager = init_sound_backend(ctx, launch_options)?; //SoundManager::new(ctx)?;
         let settings = Settings::load(ctx)?;
         let mod_requirements = ModRequirements::load(ctx)?;
 

@@ -18,6 +18,7 @@ use crate::game::shared_game_state::{Fps, SharedGameState, TimingMode};
 use crate::graphics::texture_set::{G_MAG, I_MAG};
 use crate::scene::loading_scene::LoadingScene;
 use crate::scene::Scene;
+use crate::sound;
 
 pub mod caret;
 pub mod filesystem_container;
@@ -34,10 +35,20 @@ pub mod shared_game_state;
 pub mod stage;
 pub mod weapon;
 
+#[cfg(not(feature = "backend-libretro"))]
 pub struct LaunchOptions {
     pub server_mode: bool,
     pub editor: bool,
     pub return_types: bool,
+}
+
+//There HAS to be a better way to do this...
+#[cfg(feature = "backend-libretro")]
+pub struct LaunchOptions <'a>{
+    pub server_mode: bool,
+    pub editor: bool,
+    pub return_types: bool,
+    pub audio_config: sound::backend_libretro::OutputBufConfig<'a>,
 }
 
 lazy_static! {
@@ -59,11 +70,11 @@ pub struct Game {
 
 impl Game {
     //alteration: new is now public
-    pub fn new(ctx: &mut Context) -> GameResult<Game> {
+    pub fn new(ctx: &mut Context, launch_options: &mut LaunchOptions) -> GameResult<Game> {
         let s = Game {
             scene: None,
             ui: UI::new(ctx)?,
-            state: UnsafeCell::new(SharedGameState::new(ctx)?),
+            state: UnsafeCell::new(SharedGameState::new(ctx, launch_options)?),
             start_time: Instant::now(),
             last_tick: 0,
             next_tick: 0,
@@ -306,7 +317,8 @@ pub fn init(options: LaunchOptions) -> GameResult<(Option<Pin<Box<Game>>>, Optio
         context.headless = true;
     }
 
-    let mut game = Box::pin(Game::new(&mut context)?);
+    let mut options = options;
+    let mut game = Box::pin(Game::new(&mut context, &mut options)?);
     #[cfg(feature = "scripting-lua")]
     unsafe {
         (*game.state.get()).lua.update_refs(&mut *game.state.get(), &mut *context);

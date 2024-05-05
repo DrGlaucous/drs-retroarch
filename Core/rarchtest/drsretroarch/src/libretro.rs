@@ -46,6 +46,15 @@ pub trait Context {
     fn serialize(&self, _: &mut [u8]) -> Result<(), ()>;
     /// Deserialize the savestate from the provided buffer
     fn unserialize(&mut self, _: &[u8]) -> Result<(), ()>;
+    /// Called before render_frame, tells the core how much time has elapsed
+    fn elapse_time(&mut self, delta_time: i64);
+    /// Called when it's time for the core to upload a series of audio frames
+    fn async_audio_callback(&mut self);
+    /// Called when the audio thread is paused or resumed
+    fn async_audio_state(&mut self, is_enabled: bool);
+
+
+
 }
 
 /// Global context instance holding our emulator state. Libretro
@@ -103,6 +112,12 @@ pub struct SystemAvInfo {
     pub timing: SystemTiming,
 }
 
+#[repr(C)]
+pub struct FrameTimeCallback {
+    pub callback: unsafe extern "C" fn(usec: i64),
+    pub reference: i64, //default value if the frontend is messing with time
+}
+
 pub type EnvironmentFn =
     unsafe extern "C" fn(cmd: c_uint, data: *mut c_void) -> bool;
 
@@ -158,6 +173,8 @@ pub enum Environment {
     GetLogInterface = 27,
     SetSystemAvInfo = 32,
     SetGeometry = 37,
+    SetFrameCallback = 21,
+    SetAudioCallback = 22,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -340,6 +357,59 @@ pub enum PixelFormat {
     Rgb565 = 2,
 }
 
+//module used for using async audio (may/may not successfully be initialized depending on the frontend)
+pub mod async_audio_context {
+    use super::{call_environment_mut, Environment, context};
+
+
+    #[repr(C)]
+    pub struct AsyncAudioCallback {
+        pub data_callback: unsafe extern "C" fn(),
+        pub state_callback: unsafe extern "C" fn(enabled: bool),
+    }
+
+
+    /// Called whenever the frontend needs audio.
+    #[no_mangle]
+    pub unsafe extern "C" fn audio_callback() {
+        //context().process_audio or something like that
+        context().async_audio_callback();
+    }
+
+    /// Called by the frontend to tell the core this if the audio thread is active or not 
+    #[no_mangle]
+    unsafe extern "C" fn audio_state_callback(state: bool) {
+        // True: Audio driver in frontend is active, and callback is
+        // expected to be called regularily.
+        // False: Audio driver in frontend is paused or inactive.
+        // Audio callback will not be called until set_state has been
+        // called with true.
+        // Initial state is false (inactive).
+        context().async_audio_state(state);
+    }
+
+
+    static mut STATIC_ASY_AUDIO_CONTEXT: AsyncAudioCallback = AsyncAudioCallback{
+        data_callback: audio_callback,
+        state_callback: audio_state_callback,
+    };
+
+    //register the delta time function (equivalent of micros() between times retro_run() is called)
+    //returns false if the callback is not avalable on the frontend
+    pub fn register_async_audio_callback() -> bool {
+        unsafe {
+            //let tty = &frame_time_callback;
+            call_environment_mut(Environment::SetAudioCallback,
+                                &mut STATIC_ASY_AUDIO_CONTEXT)
+        }
+    }
+
+
+
+
+}
+
+//module used for hardware rendering, contains elements like those below, but organized into a realted module
 pub mod hw_context {
     use std::ffi::CString;
     use libc::{uintptr_t, c_char, c_uint, c_void};
@@ -565,6 +635,23 @@ pub fn send_audio_samples(samples: &[i16]) {
         panic!("Frontend didn't use all our samples! ({} != {})", r, frames);
     }
 }
+
+
+//register the delta time function (equivalent of micros() between times retro_run() is called)
+pub fn register_frame_time_callback() -> bool {
+
+    let data = FrameTimeCallback{
+        callback: frame_time_callback,
+        reference: 50,
+    };
+
+    unsafe {
+        //let tty = &frame_time_callback;
+        call_environment(Environment::SetFrameCallback,
+                             &data)
+    }
+}
+
 
 //check if a button is pressed
 pub fn button_pressed(port: u8, b: JoyPadButton) -> bool {
@@ -953,6 +1040,16 @@ pub extern "C" fn retro_get_memory_size(_id: c_uint) -> size_t {
     0
 }
 
+//must be initialized with register_frame_time_callback before it is active
+#[no_mangle]
+pub unsafe extern "C" fn frame_time_callback(delta_time: i64) {
+    context().elapse_time(delta_time);
+}
+
+//*************************************************************
+// Dummy Module (for when there is not Context implemented)
+//*************************************************************
+
 pub mod dummy {
     //! Placeholder implementation for the libretro callback in order
     //! to catch calls to those function in the function pointer has
@@ -1025,6 +1122,19 @@ pub mod dummy {
         fn unserialize(&mut self, _: &[u8]) -> Result<(), ()> {
             panic!("Called unserialize with no context!");
         }
+
+        fn elapse_time(&mut self, _: i64) {
+            panic!("Called elapse_time with no context!");
+        }
+
+        fn async_audio_callback(&mut self) {
+            panic!("Called async_audio_callback with no context!");
+        }
+
+        fn async_audio_state(&mut self, _: bool) {
+            panic!("Called async_audio_state with no context!");
+        }
+
     }
 }
 

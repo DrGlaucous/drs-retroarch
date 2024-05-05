@@ -18,7 +18,6 @@ pub struct Context {
     pub size_hint: (u16, u16),
     pub(crate) filesystem: Filesystem,
     pub(crate) renderer: Option<Box<dyn BackendRenderer>>,
-    //pub renderer: Option<Box<dyn BackendRenderer>>,
     pub(crate) gamepad_context: GamepadContext,
     pub(crate) keyboard_context: KeyboardContext,
     pub(crate) real_screen_size: (u32, u32),

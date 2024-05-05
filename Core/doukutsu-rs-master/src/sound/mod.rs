@@ -17,6 +17,6 @@ mod wave_bank;
 pub mod backend_cpal;
 
 #[cfg(feature = "backend-libretro")]
-pub mod backend_cpal;
+pub mod backend_libretro;
 
-
+pub mod backend_null;

@@ -194,6 +194,8 @@ libretro_variables!(
 
 struct Core  {
     //runner backend and other loop pointers are in here
+    elapsed_time: i64,
+    async_audio_enabled: bool,
 
     has_set_res: bool,
     //get_current_framebuffer: fn() -> usize,
@@ -206,6 +208,10 @@ struct Core  {
     vert_shader: GLuint,
     frag_shader: GLuint,
     program_id: GLuint,
+
+
+    //random unrealted testing stuff:
+    personal_object: Option<ObjectToPass>
 
 }
 
@@ -225,6 +231,24 @@ impl  Core  {
             return Err(());
         }
 
+        if !libretro::register_frame_time_callback() {
+            log::warn!("Failed to init delta frame counter");
+            return Err(());
+        }
+
+        let async_audio_enabled = if !libretro::async_audio_context::register_async_audio_callback() {
+            log::warn!("Failed to init async audio, falling back to synchronous");
+            false
+        } else {true};
+
+
+        //random unrealted testing stuff:
+        let mut personal_object: Option<ObjectToPass> = None;
+        let initializer = SubFuncObj{};
+
+        initializer.make_obj(&mut personal_object);
+
+
 
         gl::load_with(|s| {libretro::hw_context::get_proc_address(s) as *const _});
 
@@ -237,6 +261,8 @@ impl  Core  {
 
             //get_current_framebuffer,
             //get_proc_address,
+            elapsed_time: 0,
+            async_audio_enabled,
             has_set_res: false,
             vbo: 0,
             vao: 0,
@@ -245,6 +271,7 @@ impl  Core  {
             vert_shader: 0,
             frag_shader: 0,
             program_id: 0,
+            personal_object: None,
             
         })
         
@@ -538,7 +565,6 @@ impl  libretro::Context  for Core  {
     }
 
     fn reset(&mut self) {
-
     }
 
     fn gl_context_reset(&mut self){
@@ -566,7 +592,47 @@ impl  libretro::Context  for Core  {
     fn unserialize(&mut self, mut buf: &[u8]) -> Result<(), ()> {
         Ok(())
     }
+    fn elapse_time(&mut self, delta_time: i64) {
+        self.elapsed_time = delta_time;
+    }
+
+    fn async_audio_callback(&mut self) {
+        
+    }
+
+    fn async_audio_state(&mut self, _: bool) {
+        
+    }
+
 
 
 }
+
+
+
+struct ObjectToPass {
+    var1: i32,
+    var2: i32,
+}
+
+struct SubFuncObj {}
+
+impl SubFuncObj {
+    pub fn make_obj(&self, passer: &mut Option<ObjectToPass>) -> bool{
+
+        let new_obj = ObjectToPass{
+            var1: 0,
+            var2: 0,
+        };
+
+        *passer = Some(new_obj);
+
+        true
+    }
+}
+
+
+
+
+
 

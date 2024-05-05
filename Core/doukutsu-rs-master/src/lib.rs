@@ -16,6 +16,7 @@ mod editor;
 mod engine_constants;
 mod entity;
 pub mod framework; //this is new
+pub mod sound; //so is this (originally private)
 pub mod game;
 mod graphics;
 mod i18n;
@@ -26,5 +27,5 @@ mod menu;
 mod mod_list;
 mod mod_requirements;
 mod scene;
-mod sound;
+//mod sound;
 mod util;
