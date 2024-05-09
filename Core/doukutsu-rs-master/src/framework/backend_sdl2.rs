@@ -409,7 +409,7 @@ impl BackendEventLoop for SDL2EventLoop {
                 }
             }
 
-            game.update(ctx).unwrap();
+            game.update(ctx, 0).unwrap();
 
             if let Some(_) = &state.next_scene {
                 game.scene = mem::take(&mut state.next_scene);

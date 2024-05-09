@@ -170,6 +170,8 @@ pub enum Environment {
     GetVariable = 15,
     SetVariables = 16,
     GetVariableUpdate = 17,
+    GetRumbleInterface = 23,
+    GetInputDeviceCapabilities = 24, //potentially unused ATM
     GetLogInterface = 27,
     SetSystemAvInfo = 32,
     SetGeometry = 37,
@@ -349,6 +351,7 @@ pub enum JoyPadButton {
     L3 = 14,
     R3 = 15,
 }
+
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PixelFormat {
@@ -588,6 +591,62 @@ pub mod log {
             STATIC_LOG(lvl, format.as_ptr() as *const _, cstr);
         }
     }
+}
+
+//interface for controlling the rumble of the joypad
+pub mod joypad_rumble_context {
+    use super::{call_environment_mut, Environment};
+    use libc::{c_uint, c_ushort};
+
+    #[repr(C)]
+    pub enum RumbleMotor {
+        RumbleWeak = 0,
+        RumbleStrong = 1,
+    }
+    impl From<u16> for RumbleMotor {
+        fn from(val: u16) -> Self {
+            match val {
+                0 => RumbleMotor::RumbleWeak,
+                _ => RumbleMotor::RumbleStrong,
+            }
+        }
+    }
+
+    
+    #[repr(C)]
+    struct RumbelstateCallback {
+        pub rumble_callback: unsafe extern "C" fn(port: c_uint, effect: RumbleMotor, strength: c_ushort) -> bool,
+    }
+
+    /// default callback holder
+    #[no_mangle]
+    pub unsafe extern "C" fn dummy_rumble_callback(_: c_uint, _: RumbleMotor, _: c_ushort) -> bool {
+        panic!("Called missing rumble_callback callback");
+    }
+
+    static mut STATIC_RUMBLE_CONTEXT: RumbelstateCallback = RumbelstateCallback{
+        rumble_callback: dummy_rumble_callback,
+    };
+
+
+    pub fn register_rumble_callback() -> bool {
+        unsafe {
+            call_environment_mut(Environment::GetRumbleInterface,
+                                &mut STATIC_RUMBLE_CONTEXT)
+        }
+    }
+
+    /// * **port** - The controller port to set the rumble state for.
+    /// * **effect** - The rumble motor to set the strength of.
+    /// * **strength** - The desired intensity of the rumble motor, ranging from \c 0 to \c 0xffff (inclusive).
+    pub fn set_rumble(controller_port: u32, effect: u16, strengh: u16) -> bool {
+        unsafe{
+            (STATIC_RUMBLE_CONTEXT.rumble_callback)(controller_port, RumbleMotor::from(effect), strengh)
+        }
+    }
+
+
+
 }
 
 //*******************************************
@@ -893,7 +952,7 @@ pub extern "C" fn retro_get_system_av_info(info: *mut SystemAvInfo) {
 #[no_mangle]
 pub extern "C" fn retro_set_controller_port_device(_port: c_uint,
                                                    _device: c_uint) {
-    dbg!("port device: {} {}", _port, _device); //debug!
+    rlog::info!("port device: {} {}", _port, _device); //debug!
 }
 
 //tell backend it needs to reset
@@ -1039,6 +1098,7 @@ pub extern "C" fn retro_get_memory_size(_id: c_uint) -> size_t {
     0
 }
 
+
 //must be initialized with register_frame_time_callback before it is active
 #[no_mangle]
 pub unsafe extern "C" fn frame_time_callback(delta_time: i64) {
@@ -1160,7 +1220,7 @@ fn build_path(cstr: &CStr) -> Option<PathBuf> {
     // encoded
     match cstr.to_str() {
         Ok(s) => Some(PathBuf::from(s)),
-        Err(e) => {
+        Err(_e) => {
             rlog::error!("The frontend gave us an invalid path: {}",
                    cstr.to_string_lossy()); //originally error! macro, is this a valid substitute?
             None

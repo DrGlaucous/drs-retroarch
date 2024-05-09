@@ -246,7 +246,7 @@ impl<'a> Core<'a> for LibretroCore<'a> {
 		
 		//env.get_variable(key)
 
-		let options = doukutsu_rs::game::LaunchOptions { server_mode: false, editor: false, return_types: true };
+		let options = doukutsu_rs::game::LaunchOptions { server_mode: false, editor: false, return_types: true, external_timer: false };
 		let (game, context) = doukutsu_rs::game::init(options).unwrap();
 
 		

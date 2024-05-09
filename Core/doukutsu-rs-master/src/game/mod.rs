@@ -40,26 +40,58 @@ pub struct LaunchOptions {
     pub server_mode: bool,
     pub editor: bool,
     pub return_types: bool,
+    pub external_timer: bool,
 }
 
-//There HAS to be a better way to do this...
+//todo: There HAS to be a better way to do this...
 #[cfg(feature = "backend-libretro")]
 pub struct LaunchOptions <'a>{
     pub server_mode: bool,
     pub editor: bool,
     pub return_types: bool,
-    pub audio_config: sound::backend_libretro::OutputBufConfig<'a>,
+    pub external_timer: bool,
+    pub audio_config: sound::backend_libretro::OutputBufConfig<'a>, //audio config to be handed down to the shared state
 }
 
 lazy_static! {
     pub static ref GAME_SUSPENDED: Mutex<bool> = Mutex::new(false);
 }
 
+//time handler
+pub struct GameTimer {
+    external_time: u64, //unit: microseconds
+    internal_time: Option<Instant>,
+}
+impl GameTimer {
+    fn new(use_external_time: bool) -> GameTimer {
+        GameTimer{
+            external_time: 0,
+            internal_time: if use_external_time {None} else {Some(Instant::now())}
+        }
+    }
+    fn update(&mut self, micros: u64) {
+        self.external_time = self.external_time.wrapping_add(micros);
+    }
+
+    fn elapsed(&self) -> Duration {
+        
+        if let Some(instant) = self.internal_time {
+            instant.elapsed()
+        }
+        else {
+            Duration::from_micros(self.external_time)
+        }
+
+    }
+
+}
+
+
 pub struct Game {
     pub(crate) scene: Option<Box<dyn Scene>>,
     pub state: UnsafeCell<SharedGameState>,
     ui: UI,
-    start_time: Instant,
+    game_timer: GameTimer,
     last_tick: u128,
     next_tick: u128,
     pub(crate) loops: u32,
@@ -75,7 +107,7 @@ impl Game {
             scene: None,
             ui: UI::new(ctx)?,
             state: UnsafeCell::new(SharedGameState::new(ctx, launch_options)?),
-            start_time: Instant::now(),
+            game_timer: GameTimer::new(launch_options.external_timer),
             last_tick: 0,
             next_tick: 0,
             loops: 0,
@@ -87,7 +119,8 @@ impl Game {
         Ok(s)
     }
 
-    pub(crate) fn update(&mut self, ctx: &mut Context) -> GameResult {
+    pub(crate) fn update(&mut self, ctx: &mut Context, elapsed_micros: u64) -> GameResult {
+        self.game_timer.update(elapsed_micros);
         if let Some(scene) = &mut self.scene {
             let state_ref = unsafe { &mut *self.state.get() };
 
@@ -102,7 +135,7 @@ impl Game {
                 TimingMode::_50Hz | TimingMode::_60Hz => {
                     let last_tick = self.next_tick;
 
-                    while self.start_time.elapsed().as_nanos() >= self.next_tick && self.loops < 10 {
+                    while self.game_timer.elapsed().as_nanos() >= self.next_tick && self.loops < 10 {
                         if (speed - 1.0).abs() < 0.01 {
                             self.next_tick += state_ref.settings.timing_mode.get_delta() as u128;
                         } else {
@@ -113,7 +146,7 @@ impl Game {
 
                     if self.loops == 10 {
                         log::warn!("Frame skip is way too high, a long system lag occurred?");
-                        self.last_tick = self.start_time.elapsed().as_nanos();
+                        self.last_tick = self.game_timer.elapsed().as_nanos();
                         self.next_tick =
                             self.last_tick + (state_ref.settings.timing_mode.get_delta() as f64 / speed) as u128;
                         self.loops = 0;
@@ -156,12 +189,12 @@ impl Game {
 
                 let delta = (state_ref.settings.timing_mode.get_delta() / divisor) as u64;
 
-                let now = self.start_time.elapsed().as_nanos();
+                let now = self.game_timer.elapsed().as_nanos();
                 if now > self.next_tick_draw + delta as u128 * 4 {
                     self.next_tick_draw = now;
                 }
 
-                while self.start_time.elapsed().as_nanos() >= self.next_tick_draw {
+                while self.game_timer.elapsed().as_nanos() >= self.next_tick_draw {
                     self.next_tick_draw += delta as u128;
                     self.present = true;
                 }
@@ -181,7 +214,7 @@ impl Game {
         }
 
         if state_ref.settings.timing_mode != TimingMode::FrameSynchronized {
-            let mut elapsed = self.start_time.elapsed().as_nanos();
+            let mut elapsed = self.game_timer.elapsed().as_nanos();
 
             // Even with the non-monotonic Instant mitigation at the start of the event loop, there's still a chance of it not working.
             // This check here should trigger if that happens and makes sure there's no panic from an underflow.
@@ -215,7 +248,7 @@ impl Game {
             }
 
             if state_ref.settings.fps_counter {
-                self.fps.act(state_ref, ctx, self.start_time.elapsed().as_nanos())?;
+                self.fps.act(state_ref, ctx, self.game_timer.elapsed().as_nanos())?;
             }
 
             self.ui.draw(state_ref, ctx, scene)?;

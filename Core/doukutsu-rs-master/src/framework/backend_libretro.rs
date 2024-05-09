@@ -8,25 +8,26 @@ use std::sync::Arc;
 use std::vec::Vec;
 
 
-//new libretro stuff (copied from example)
-use libretro_rs::c_utf8::c_utf8;
-use libretro_rs::retro::env::{Init, UnloadGame};
-use libretro_rs::retro::pixel::{Format, XRGB8888};
-//log conflicts, we need to explicitly include everything
-//use libretro_rs::retro::*;
-use libretro_rs::retro::{av, cores, device, env, error, fs, game, log as retro_log, mem as retro_mem, str};
-use libretro_rs::retro::av::*;
-use libretro_rs::retro::cores::*;
-use libretro_rs::{ext, libretro_core};
+// //new libretro stuff (copied from example)
+// use libretro_rs::c_utf8::c_utf8;
+// use libretro_rs::retro::env::{Init, UnloadGame};
+// use libretro_rs::retro::pixel::{Format, XRGB8888};
+// //log conflicts, we need to explicitly include everything
+// //use libretro_rs::retro::*;
+// use libretro_rs::retro::{av, cores, device, env, error, fs, game, log as retro_log, mem as retro_mem, str};
+// use libretro_rs::retro::av::*;
+// use libretro_rs::retro::cores::*;
+// use libretro_rs::{ext, libretro_core};
 
 use imgui::{DrawData, TextureId, Ui};
 
 use crate::common::{Color, Rect};
 use crate::framework::backend::{
-    Backend, BackendEventLoop, BackendRenderer, BackendShader, BackendTexture, SpriteBatchCommand, VertexData,
+    Backend, BackendEventLoop, BackendRenderer, BackendGamepad, BackendShader, BackendTexture, SpriteBatchCommand, VertexData,
 };
 use crate::framework::context::Context;
 use crate::framework::error::{GameResult, GameError};
+use crate::framework::gamepad::GamepadType;
 use crate::framework::graphics::BlendMode;
 
 
@@ -38,6 +39,7 @@ use crate::game::shared_game_state::SharedGameState;
 use crate::game::Game;
 
 use super::keyboard::ScanCode;
+use super::gamepad::Button;
 
 pub struct LibretroBackend;
 
@@ -114,6 +116,10 @@ impl LibretroEventLoop {
     //called on init and whenever the frontend's environment has changed (immediately after destroy_renderer)
     pub fn rebuild_renderer(&self, state_ref: &mut SharedGameState, ctx: &mut Context, width: u32, height: u32) -> GameResult {
         ctx.renderer = Some(self.new_renderer(ctx)?);
+        self.handle_resize(state_ref, ctx, width, height)
+    }
+
+    pub fn handle_resize(&self, state_ref: &mut SharedGameState, ctx: &mut Context, width: u32, height: u32) -> GameResult {
         ctx.screen_size = (width as f32, height as f32);
         
         if let Some(renderer) = &ctx.renderer {
@@ -121,8 +127,6 @@ impl LibretroEventLoop {
                 imgui.io_mut().display_size = [ctx.screen_size.0, ctx.screen_size.1];
             }
         }
-
-
         state_ref.handle_resize(ctx);
 
         Ok(())
@@ -130,11 +134,11 @@ impl LibretroEventLoop {
 
 
     //like run(), but called repeatedly
-    pub fn update(&mut self, state_ref: &mut SharedGameState, game: &mut Game, ctx: &mut Context)
+    pub fn update(&mut self, state_ref: &mut SharedGameState, game: &mut Game, ctx: &mut Context, micros: u64)
     {
         //let state_ref = unsafe { &mut *game.state.get() };
 
-        game.update(ctx).unwrap();
+        game.update(ctx, micros).unwrap();
 
         if state_ref.shutdown {
             log::info!("Shutting down...");
@@ -161,11 +165,27 @@ impl LibretroEventLoop {
     }
 
     //takes input from libretro callbacks and pushes it into the engine
-    pub fn update_input(&mut self, ctx: &mut Context, key_id: ScanCode, key_state: bool)
+    pub fn update_keys(&mut self, ctx: &mut Context, key_id: ScanCode, key_state: bool)
     {
         ctx.keyboard_context.set_key(key_id, key_state);
     } 
+    pub fn update_gamepad(&mut self, ctx: &mut Context, id: u16, button_id: Button, button_state: bool)
+    {
+        ctx.gamepad_context.set_button(id as u32, button_id, button_state);
+    }
 
+    pub fn add_gamepad(&mut self,
+        state_ref: &mut SharedGameState,
+        ctx: &mut Context,
+        id: u16,
+        rumble_fn: Option<fn (controller_port: u32, effect: u16, strengh: u16) -> bool>,
+        ) {
+        log::info!("Connected gamepad: {} (ID: {})", "Retropad", id);
+
+        let axis_sensitivity = state_ref.settings.get_gamepad_axis_sensitivity(id as u32);
+        ctx.gamepad_context.add_gamepad(LibretroGamepad::new(id, rumble_fn), axis_sensitivity);
+        ctx.gamepad_context.set_gamepad_type(id as u32, GamepadType::Virtual);
+    }
 
 
 }
@@ -251,7 +271,38 @@ impl BackendEventLoop for LibretroEventLoop {
 }
 
 
+struct LibretroGamepad {
+    id: u16,
+    rumble_fn: Option<fn (controller_port: u32, effect: u16, strengh: u16) -> bool>,
+}
 
+impl LibretroGamepad {
+    pub fn new(id: u16, rumble_fn: Option<fn (_: u32, _: u16, _: u16) -> bool>) -> Box<dyn BackendGamepad> {
+        Box::new(LibretroGamepad {
+            id,
+            rumble_fn,
+        })
+    }
+}
+
+impl BackendGamepad for LibretroGamepad {
+
+    fn set_rumble(&mut self, low_freq: u16, high_freq: u16, duration_ms: u32) -> GameResult {
+        
+        //todo: MAKE IT STOP!!!!!
+        if let Some(rumble_fn) = self.rumble_fn{
+            let _ = rumble_fn(self.id as u32, 0, low_freq);
+            let _ = rumble_fn(self.id as u32, 1, high_freq);
+        }
+
+        Ok(())
+    }
+
+    fn instance_id(&self) -> u32 {
+        self.id as u32
+    }
+
+}
 
 //todo: fallback software renderer (not opengl)
 //actually puts the stuff onto the screen, 

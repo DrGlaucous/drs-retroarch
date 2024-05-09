@@ -146,7 +146,7 @@ impl SoundManagerLibretro {
 
         let runner = runner.ok();
 
-        //todo: pass runner object out to the core
+        //pass runner object out to the core
         *config.runner_out = runner;
 
         Ok(sound_manager)
@@ -185,8 +185,8 @@ impl SoundManager for SoundManagerLibretro {
         Ok(())
     }
 
+    //the frontend will handle pausing and resuming
     fn pause(&mut self) {
-        //the frontend will handle pausing and resuming
         // if let Some(stream) = &mut self.stream {
         //     let _ = stream.pause();
         // }
