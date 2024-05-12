@@ -22,7 +22,7 @@
             },           
             //starting in the 'example' folder, output is in the parent's 'test' folder
             "program": "${workspaceFolder}/../../../Engine/RetroArch-Win64/retroarch.exe",
-            "args": ["--verbose", "-L", "./target/debug/lttest.dll", "Maze.ch8"],
+            "args": ["--verbose", "-L", "./target/debug/lttest.dll", "./Maze.ch8"],
             "cwd": "${workspaceFolder}"
         }
     ]

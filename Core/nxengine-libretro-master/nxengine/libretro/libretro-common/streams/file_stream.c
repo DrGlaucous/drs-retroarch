@@ -26,6 +26,8 @@
 #include <stdarg.h>
 #include <ctype.h>
 
+#include <../../nx_logger.h>
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -163,6 +165,7 @@ int64_t filestream_truncate(RFILE *stream, int64_t length)
  **/
 RFILE* filestream_open(const char *path, unsigned mode, unsigned hints)
 {
+   NX_LOG("FILESTREAM OPEN: %s, %d, %d, %x\n", path, mode, hints, filestream_open_cb);
    struct retro_vfs_file_handle  *fp = NULL;
    RFILE* output                     = NULL;
 
@@ -175,6 +178,8 @@ RFILE* filestream_open(const char *path, unsigned mode, unsigned hints)
 
    if (!fp)
       return NULL;
+
+   NX_LOG("FILESTREAM PTR: %d\n", (unsigned long)fp);
 
    output             = (RFILE*)malloc(sizeof(RFILE));
    output->error_flag = false;

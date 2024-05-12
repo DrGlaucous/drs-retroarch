@@ -13,14 +13,15 @@ use gl::types::{GLsizei, GLuint, GLfloat, GLsizeiptr, GLint, GLchar};
 
 
 
-use crate::libretro::{self, gl_frame_done, variables_need_update};
+use crate::libretro::{self, gl_frame_done, retro_filesystem_context, variables_need_update};
+use crate::libretro::retro_filesystem_context::{FileHandle, DirHandle, FileAccessHint, FileAccessMode, FileSeekPos};
 
 /// Static system information sent to the frontend on request
 pub const SYSTEM_INFO: libretro::SystemInfo = libretro::SystemInfo {
     library_name: cstring!("AAAAAAAAAAAAAAAA"),
     library_version: "-20" as *const _ as *const c_char,
     valid_extensions: cstring!("exe"),
-    need_fullpath: false,
+    need_fullpath: true,
     block_extract: false,
 };
 
@@ -73,7 +74,7 @@ pub fn load_game(disc: PathBuf) -> Option<Box<dyn libretro::Context>> {
     log::info!("Loading {:?}", disc); //info!
 
     //todo: get disk into there
-    Core::new().ok()
+    Core::new(disc).ok()
         .map(|c| Box::new(c) as Box<dyn libretro::Context>)
 }
 
@@ -217,7 +218,7 @@ struct Core  {
 
 impl  Core  {
 
-    fn new() -> Result<Core, ()>{
+    fn new(game_path: PathBuf) -> Result<Core, ()>{
 
         //initialize the hardware backends
         if !libretro::set_pixel_format(libretro::PixelFormat::Xrgb8888) {
@@ -231,7 +232,7 @@ impl  Core  {
             return Err(());
         }
 
-        if !libretro::register_frame_time_callback() {
+        if !libretro::register_frame_time_callback(50) {
             log::warn!("Failed to init delta frame counter");
             return Err(());
         }
@@ -240,6 +241,13 @@ impl  Core  {
             log::warn!("Failed to init async audio, falling back to synchronous");
             false
         } else {true};
+
+        if !libretro::retro_filesystem_context::register_vfs_interface(3) {
+           log::warn!("Failed to init filesystem");
+           return Err(());
+        }
+
+        let tt = retro_filesystem_context::fopen(game_path, 1, 0);
 
 
         //random unrealted testing stuff:
@@ -432,6 +440,10 @@ impl  libretro::Context  for Core  {
 
 
             self.make_dirty_shaders();
+
+
+            //let tt = retro_filesystem_context::fopen(PathBuf::from("./Maze.ch8"), 1, 0);
+
 
 
 

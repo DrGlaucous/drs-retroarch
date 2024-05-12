@@ -170,11 +170,14 @@ pub enum Environment {
     GetVariable = 15,
     SetVariables = 16,
     GetVariableUpdate = 17,
+    GetRumbleInterface = 23,
+    GetInputDeviceCapabilities = 24, //potentially unused ATM
     GetLogInterface = 27,
     SetSystemAvInfo = 32,
     SetGeometry = 37,
     SetFrameCallback = 21,
     SetAudioCallback = 22,
+    GetVFSInterface = (45 | 0x10000),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -350,6 +353,7 @@ pub enum JoyPadButton {
     R3 = 15,
 }
 
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PixelFormat {
     Xrgb1555 = 0,
@@ -398,7 +402,6 @@ pub mod async_audio_context {
     //returns false if the callback is not avalable on the frontend
     pub fn register_async_audio_callback() -> bool {
         unsafe {
-            //let tty = &frame_time_callback;
             call_environment_mut(Environment::SetAudioCallback,
                                 &mut STATIC_ASY_AUDIO_CONTEXT)
         }
@@ -591,6 +594,393 @@ pub mod log {
     }
 }
 
+//interface for controlling the rumble of the joypad
+pub mod joypad_rumble_context {
+    use super::{call_environment_mut, Environment};
+    use libc::{c_uint, c_ushort};
+
+    #[repr(C)]
+    pub enum RumbleMotor {
+        RumbleWeak = 0,
+        RumbleStrong = 1,
+    }
+    impl From<u16> for RumbleMotor {
+        fn from(val: u16) -> Self {
+            match val {
+                0 => RumbleMotor::RumbleWeak,
+                _ => RumbleMotor::RumbleStrong,
+            }
+        }
+    }
+
+    
+    #[repr(C)]
+    struct RumbelstateCallback {
+        pub rumble_callback: unsafe extern "C" fn(port: c_uint, effect: RumbleMotor, strength: c_ushort) -> bool,
+    }
+
+    /// default callback holder
+    #[no_mangle]
+    pub unsafe extern "C" fn dummy_rumble_callback(_: c_uint, _: RumbleMotor, _: c_ushort) -> bool {
+        panic!("Called missing rumble_callback callback");
+    }
+
+    static mut STATIC_RUMBLE_CONTEXT: RumbelstateCallback = RumbelstateCallback{
+        rumble_callback: dummy_rumble_callback,
+    };
+
+
+    pub fn register_rumble_callback() -> bool {
+        unsafe {
+            call_environment_mut(Environment::GetRumbleInterface,
+                                &mut STATIC_RUMBLE_CONTEXT)
+        }
+    }
+
+    /// * **port** - The controller port to set the rumble state for.
+    /// * **effect** - The rumble motor to set the strength of.
+    /// * **strength** - The desired intensity of the rumble motor, ranging from \c 0 to \c 0xffff (inclusive).
+    pub fn set_rumble(controller_port: u32, effect: u16, strengh: u16) -> bool {
+        unsafe{
+            (STATIC_RUMBLE_CONTEXT.rumble_callback)(controller_port, RumbleMotor::from(effect), strengh)
+        }
+    }
+
+
+
+}
+
+pub mod retro_filesystem_context {
+    use std::path::{Path, PathBuf};
+    use super::{call_environment_mut, Environment};
+    use libc::{c_uint, c_ushort, c_void, c_char, c_int};
+
+
+    pub enum FileAccessMode {
+        AccessRead = 1,
+        AccessWrite = 2,
+        AccessReadWrite = 3,
+        AccessUpdateExisting = 4,
+    }
+    pub enum FileAccessHint {
+        HintNone = 0,
+        HintFrequentAccess = 1,
+    }
+    pub enum FileSeekPos {
+        SeekStart = 0,
+        SeekCurrent = 1,
+        SeekEnd = 2,
+    }
+
+    //todo: RETRO_VFS_STAT_IS_VALID
+
+
+
+    // Opaque pointers
+    // #[repr(C)]
+    // #[derive(Debug, Copy, Clone)]
+    // pub struct FileHandle {
+    //     _unused: [u8; 0],
+    // }
+    // #[repr(C)]
+    // #[derive(Debug, Copy, Clone)]
+    // pub struct DirHandle {
+    //     _unused: [u8; 0],
+    // }
+    
+    //maybe this?
+    pub type FileHandle = c_void;
+    pub type DirHandle = c_void;
+
+    //*******************
+    // Functions Types
+    //*******************
+    pub type GetPathFn = unsafe extern "C" fn(stream: *mut FileHandle) -> *const c_char;
+    pub type OpenFileFn = unsafe extern "C" fn(
+        path: *const c_char,
+        mode: c_uint,
+        hints: c_uint,
+    ) -> *mut FileHandle;
+    pub type CloseFileFn = unsafe extern "C" fn(stream: *mut FileHandle) -> c_int;
+    pub type SizeFileFn = unsafe extern "C" fn(stream: *mut FileHandle) -> i64;
+    pub type TellFileFn = unsafe extern "C" fn(stream: *mut FileHandle) -> i64;
+    pub type SeekFileFn = unsafe extern "C" fn(
+        stream: *mut FileHandle,
+        offset: i64,
+        seek_position: c_int,
+    ) -> i64;
+    pub type ReadFileFn = unsafe extern "C" fn(
+        stream: *mut FileHandle,
+        s: *mut c_void,
+        len: u64,
+    ) -> i64;
+    pub type WriteFileFn = unsafe extern "C" fn(
+        stream: *mut FileHandle,
+        s: *const c_void,
+        len: u64,
+    ) -> i64;
+    pub type FlushFileFn = unsafe extern "C" fn(stream: *mut FileHandle) -> c_int;
+    pub type RemoveFileFn = unsafe extern "C" fn(path: *const c_char) -> c_int;
+    pub type RenameFileFn = unsafe extern "C" fn(
+        old_path: *const c_char,
+        new_path: *const c_char,
+    ) -> c_int;
+    
+    pub type TruncateFileFn = unsafe extern "C" fn(stream: *mut FileHandle, length: i64) -> i64;
+    pub type StatFileFn = unsafe extern "C" fn(path: *const c_char, size: *mut i32) -> c_int;
+    pub type MakeDirectoryFn = unsafe extern "C" fn(dir: *const c_char) -> c_int;
+    pub type OpenDirectoryFn = unsafe extern "C" fn(
+        dir: *const c_char,
+        include_hidden: bool,
+    ) -> *mut DirHandle;
+    pub type ReadDirectoryFn = unsafe extern "C" fn(dirstream: *mut DirHandle) -> bool;
+    pub type GetNameDirentFn = unsafe extern "C" fn(dirstream: *mut DirHandle) -> *const c_char;
+    pub type IsDirectoryDirentFn = unsafe extern "C" fn(dirstream: *mut DirHandle) -> bool;
+    pub type CloseDirectoryFn = unsafe extern "C" fn(dirstream: *mut DirHandle) -> c_int;
+
+    //*******************
+    // Dummy Functions
+    //*******************
+    pub unsafe extern "C" fn dummy_path_fn(_stream: *mut FileHandle) -> *const c_char{
+        panic!("Called dummy_path_fn");
+    }
+    pub unsafe extern "C" fn dummy_openfile_fn(
+        _path: *const c_char,
+        _mode: c_uint,
+        _hints: c_uint,
+    ) -> *mut FileHandle{
+        panic!("Called dummy_openfile_fn");
+    }
+    pub unsafe extern "C" fn dummy_closefile_fn(_stream: *mut FileHandle) -> c_int{
+        panic!("Called dummy_closefile_fn");
+    }
+    pub unsafe extern "C" fn dummy_sizefile_fn(_stream: *mut FileHandle) -> i64{
+        panic!("Called dummy_sizefile_fn");
+    }
+    pub unsafe extern "C" fn dummy_tellfile_fn(_stream: *mut FileHandle) -> i64{
+        panic!("Called dummy_tellfile_fn");
+    }
+    pub unsafe extern "C" fn dummy_seekfile_fn(
+        _stream: *mut FileHandle,
+        _offset: i64,
+        _seek_position: c_int,
+    ) -> i64{
+        panic!("Called dummy_seekfile_fn");
+    }
+    pub unsafe extern "C" fn dummy_readfile_fn(
+        _stream: *mut FileHandle,
+        _s: *mut c_void,
+        _len: u64,
+    ) -> i64{
+        panic!("Called dummy_readfile_fn");
+    }
+    pub unsafe extern "C" fn dummy_writefile_fn(
+        _stream: *mut FileHandle,
+        _s: *const c_void,
+        _len: u64,
+    ) -> i64{
+        panic!("Called dummy_writefile_fn");
+    }
+    pub unsafe extern "C" fn dummy_flushfile_fn(_stream: *mut FileHandle) -> c_int{
+        panic!("Called dummy_flushfile_fn");
+    }
+    pub unsafe extern "C" fn dummy_removefile_fn(_path: *const c_char) -> c_int{
+        panic!("Called dummy_removefile_fn");
+    }
+    pub unsafe extern "C" fn dummy_renamefile_fn(
+        _old_path: *const c_char,
+        _new_path: *const c_char,
+    ) -> c_int{
+        panic!("Called dummy_renamefile_fn");
+    }  
+    pub unsafe extern "C" fn dummy_truncatefile_fn(_stream: *mut FileHandle, _length: i64) -> i64{
+        panic!("Called dummy_truncatefile_fn");
+    }
+    pub unsafe extern "C" fn dummy_statfile_fn(_path: *const c_char, _size: *mut i32) -> c_int{
+        panic!("Called dummy_statfile_fn");
+    }
+    pub unsafe extern "C" fn dummy_makedir_fn(_dir: *const c_char) -> c_int{
+        panic!("Called dummy_makedir_fn");
+    }
+    pub unsafe extern "C" fn dummy_opendir_fn(
+        _dir: *const c_char,
+        _include_hidden: bool,
+    ) -> *mut DirHandle{
+        panic!("Called dummy_opendir_fn");
+    }
+    pub unsafe extern "C" fn dummy_readdir_fn(_dirstream: *mut DirHandle) -> bool{
+        panic!("Called dummy_readdir_fn");
+    }
+    pub unsafe extern "C" fn dummy_getnamedirent_fn(_dirstream: *mut DirHandle) -> *const c_char{
+        panic!("Called dummy_getnamedirent_fn");
+    }
+    pub unsafe extern "C" fn dummy_isdirectorydirent_fn(_dirstream: *mut DirHandle) -> bool{
+        panic!("Called dummy_isdirectorydirent_fn");
+    }
+    pub unsafe extern "C" fn dummy_closedirectoryfn_fn(_dirstream: *mut DirHandle) -> c_int{
+        panic!("Called dummy_closedirectoryfn_fn");
+    }
+
+
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    #[repr(C)]
+    pub struct VFSInterface {
+        vfs_get_path: GetPathFn,
+        vfs_open: OpenFileFn,
+        vfs_close: CloseFileFn,
+        vfs_size: SizeFileFn,
+        vfs_tell: TellFileFn,
+        vfs_seek: SeekFileFn,
+        vfs_read: ReadFileFn,
+        vfs_write: WriteFileFn,
+        vfs_flush: FlushFileFn,
+        vfs_remove: RemoveFileFn,
+        vfs_rename: RenameFileFn,
+        //v2 interface
+        vfs_truncate: TruncateFileFn,
+        //v3 interface
+        vfs_stat: StatFileFn,
+        vfs_mkdir: MakeDirectoryFn,
+        vfs_opendir: OpenDirectoryFn,
+        vfs_readdir: ReadDirectoryFn,
+        vfs_dirent_get_name: GetNameDirentFn,
+        vfs_dirent_is_dir: IsDirectoryDirentFn,
+        vfs_closedir: CloseDirectoryFn,
+    }
+
+    static mut STATIC_VFS_CONTEXT: VFSInterface = VFSInterface {
+        vfs_get_path: dummy_path_fn,
+        vfs_open: dummy_openfile_fn,
+        vfs_close: dummy_closefile_fn,
+        vfs_size: dummy_sizefile_fn,
+        vfs_tell: dummy_tellfile_fn,
+        vfs_seek: dummy_seekfile_fn,
+        vfs_read: dummy_readfile_fn,
+        vfs_write: dummy_writefile_fn,
+        vfs_flush: dummy_flushfile_fn,
+        vfs_remove: dummy_removefile_fn,
+        vfs_rename: dummy_renamefile_fn,
+        //v2 interface
+        vfs_truncate: dummy_truncatefile_fn,
+        //v3 interface
+        vfs_stat: dummy_statfile_fn,
+        vfs_mkdir: dummy_makedir_fn,
+        vfs_opendir: dummy_opendir_fn,
+        vfs_readdir: dummy_readdir_fn,
+        vfs_dirent_get_name: dummy_getnamedirent_fn,
+        vfs_dirent_is_dir: dummy_isdirectorydirent_fn,
+        vfs_closedir: dummy_closedirectoryfn_fn,
+    };
+
+
+    //passed into the command interface to get file operation handles
+    #[repr(C)]
+    pub struct VFSInterfaceInfo {
+        required_version: c_uint,
+        interface: *mut VFSInterface, //*mut VFSInterface,
+    }
+
+
+
+    // //*mut dyn Context = 1 as *mut dummy::Context;
+    // static mut STATIC_VFS_CONTEXT: VFSInterfaceInfo = VFSInterfaceInfo{
+    //     required_version: 1,
+    //     interface: unsafe{ &STATIC_DUMMY_VFS_CONTEXT as *const _ as *mut VFSInterface},
+    // };
+
+
+    pub fn register_vfs_interface(interface_version: u32) -> bool {
+        unsafe {
+
+            let mut vfs_getter = VFSInterfaceInfo {
+                required_version: interface_version,
+                interface: &STATIC_VFS_CONTEXT as *const _ as *mut VFSInterface,
+            };
+
+            let result = call_environment_mut(Environment::GetVFSInterface,
+                &mut vfs_getter);
+            
+
+            STATIC_VFS_CONTEXT = *vfs_getter.interface;
+
+
+
+            // let pth = "./Maze.ch8".as_bytes();
+            // let tt = (STATIC_VFS_CONTEXT.vfs_open)(pth.as_ptr() as *const c_char, 1, 0);
+            // if tt as *const _ == std::ptr::null()
+            // {
+            //     let mut bob = 3;
+            //     let mut bill = bob + 1;
+            //     bob = bob + bill;
+            // }
+
+            return result;
+            
+        }
+    }
+
+    // This has problems (always returns "null", no matter what file is attempted to open)
+    pub fn fopen(path: PathBuf, mode: u32, hints: u32) -> Result<(), ()> {
+
+        unsafe{
+
+            //TEST
+            let mut pth2 = "./Maze.ch8".as_bytes();
+            let tt = (STATIC_VFS_CONTEXT.vfs_open)(pth2.as_ptr() as *const c_char, 1, 0);
+            if tt as *const _ == std::ptr::null()
+            {
+                let mut bob = 3;
+                let mut bill = bob + 1;
+                bob = bob + bill;
+
+            }
+
+            //ENDTEST
+
+
+
+            //let path = PathBuf::from("./Maze.ch8");
+
+            //need to do this because vfs expects a null terminated string, but PathBuf does not.
+            let path = String::from(path.to_str().unwrap()) + "\0";
+            let pth = path.as_bytes();
+
+
+            let file = (STATIC_VFS_CONTEXT.vfs_open)(pth.as_ptr() as *const c_char, mode, hints);
+
+            let rrt = (STATIC_VFS_CONTEXT.vfs_open) as *const u8;
+
+            if file as *const _ == std::ptr::null() {
+                let mut bob = 3;
+                let mut bill = bob + 1;
+                bob = bob + bill;
+            }
+            let dir = "/\0".as_ptr() as *const _ as *const i8;
+            let mut dir_handle = (STATIC_VFS_CONTEXT.vfs_opendir)(dir, true);
+            
+            if dir_handle as *const _ == std::ptr::null() {
+                let mut bob = 3;
+                let mut bill = bob + 1;
+                bob = bob + bill;
+            }
+
+            {
+                let mut bob = 3;
+                let mut bill = bob + 1;
+                bob = bob + bill;
+            }
+
+            Ok(())
+
+        }
+    }
+
+
+
+}
+
+
 //*******************************************
 // Libretro callbacks loaded by the frontend
 //*******************************************
@@ -638,11 +1028,11 @@ pub fn send_audio_samples(samples: &[i16]) {
 
 
 //register the delta time function (equivalent of micros() between times retro_run() is called)
-pub fn register_frame_time_callback() -> bool {
+pub fn register_frame_time_callback(default_time: i64) -> bool {
 
     let data = FrameTimeCallback{
         callback: frame_time_callback,
-        reference: 50,
+        reference: default_time,
     };
 
     unsafe {
@@ -894,7 +1284,7 @@ pub extern "C" fn retro_get_system_av_info(info: *mut SystemAvInfo) {
 #[no_mangle]
 pub extern "C" fn retro_set_controller_port_device(_port: c_uint,
                                                    _device: c_uint) {
-    dbg!("port device: {} {}", _port, _device); //debug!
+    rlog::info!("port device: {} {}", _port, _device); //debug!
 }
 
 //tell backend it needs to reset
@@ -1040,6 +1430,7 @@ pub extern "C" fn retro_get_memory_size(_id: c_uint) -> size_t {
     0
 }
 
+
 //must be initialized with register_frame_time_callback before it is active
 #[no_mangle]
 pub unsafe extern "C" fn frame_time_callback(delta_time: i64) {
@@ -1132,7 +1523,8 @@ pub mod dummy {
         }
 
         fn async_audio_state(&mut self, _: bool) {
-            panic!("Called async_audio_state with no context!");
+            //this is reduced to warn level because the core has been unloaded by the time this is called.
+            log::warn!("Called async_audio_state with no context!");
         }
 
     }
@@ -1160,7 +1552,7 @@ fn build_path(cstr: &CStr) -> Option<PathBuf> {
     // encoded
     match cstr.to_str() {
         Ok(s) => Some(PathBuf::from(s)),
-        Err(e) => {
+        Err(_e) => {
             rlog::error!("The frontend gave us an invalid path: {}",
                    cstr.to_string_lossy()); //originally error! macro, is this a valid substitute?
             None

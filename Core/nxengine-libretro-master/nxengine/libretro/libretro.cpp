@@ -240,6 +240,8 @@ bool retro_load_game(const struct retro_game_info *game)
 {
    g_dir[0] = '\0';
 
+   NX_LOG("game_path: %s\n", game->path);
+
    if (game)
       extract_directory(g_dir, game->path, sizeof(g_dir));
    else
