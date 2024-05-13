@@ -53,7 +53,7 @@ void retro_init_saves(void)
    char savedirProfile[1024];
    char profile_name[1024];
 
-   // Copy profiles only if te folders are different.
+   // Copy profiles only if the folders are different.
    if (strcmp(save_dir, g_dir) != 0)
    {
            int i;

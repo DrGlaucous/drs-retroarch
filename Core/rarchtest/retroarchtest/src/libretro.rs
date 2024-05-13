@@ -173,6 +173,7 @@ pub enum Environment {
     GetRumbleInterface = 23,
     GetInputDeviceCapabilities = 24, //potentially unused ATM
     GetLogInterface = 27,
+    GetSaveDirectory = 31,
     SetSystemAvInfo = 32,
     SetGeometry = 37,
     SetFrameCallback = 21,
@@ -650,47 +651,52 @@ pub mod joypad_rumble_context {
 
 }
 
+//interface for using retroarch's virtual filesystem
 pub mod retro_filesystem_context {
-    use std::path::{Path, PathBuf};
+
+    use std::{ffi::CStr, path::PathBuf};
     use super::{call_environment_mut, Environment};
-    use libc::{c_uint, c_ushort, c_void, c_char, c_int};
+    use libc::{c_uint, c_void, c_char, c_int};
 
 
+    #[derive(Clone, Copy, PartialEq, Eq)]
     pub enum FileAccessMode {
         AccessRead = 1,
         AccessWrite = 2,
         AccessReadWrite = 3,
         AccessUpdateExisting = 4,
     }
+    #[derive(Clone, Copy, PartialEq, Eq)]
     pub enum FileAccessHint {
         HintNone = 0,
         HintFrequentAccess = 1,
     }
+    #[derive(Clone, Copy, PartialEq, Eq)]
     pub enum FileSeekPos {
         SeekStart = 0,
         SeekCurrent = 1,
         SeekEnd = 2,
     }
 
-    //todo: RETRO_VFS_STAT_IS_VALID
+    //todo: RETRO_VFS_STAT_IS_VALID bitfield
 
-
+    //note: relative file paths must begin with ./, according to retroarch standards.
 
     // Opaque pointers
-    // #[repr(C)]
-    // #[derive(Debug, Copy, Clone)]
-    // pub struct FileHandle {
-    //     _unused: [u8; 0],
-    // }
-    // #[repr(C)]
-    // #[derive(Debug, Copy, Clone)]
-    // pub struct DirHandle {
-    //     _unused: [u8; 0],
-    // }
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone)]
+    pub struct FileHandle {
+        _unused: [u8; 0],
+    }
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone)]
+    pub struct DirHandle {
+        _unused: [u8; 0],
+    }
     
-    //maybe this?
-    pub type FileHandle = c_void;
-    pub type DirHandle = c_void;
+    //maybe this? (must implement copy and clone)
+    //pub type FileHandle = c_void;
+    //pub type DirHandle = c_void;
 
     //*******************
     // Functions Types
@@ -878,17 +884,8 @@ pub mod retro_filesystem_context {
     #[repr(C)]
     pub struct VFSInterfaceInfo {
         required_version: c_uint,
-        interface: *mut VFSInterface, //*mut VFSInterface,
+        interface: *mut VFSInterface,
     }
-
-
-
-    // //*mut dyn Context = 1 as *mut dummy::Context;
-    // static mut STATIC_VFS_CONTEXT: VFSInterfaceInfo = VFSInterfaceInfo{
-    //     required_version: 1,
-    //     interface: unsafe{ &STATIC_DUMMY_VFS_CONTEXT as *const _ as *mut VFSInterface},
-    // };
-
 
     pub fn register_vfs_interface(interface_version: u32) -> bool {
         unsafe {
@@ -904,78 +901,188 @@ pub mod retro_filesystem_context {
 
             STATIC_VFS_CONTEXT = *vfs_getter.interface;
 
-
-
-            // let pth = "./Maze.ch8".as_bytes();
-            // let tt = (STATIC_VFS_CONTEXT.vfs_open)(pth.as_ptr() as *const c_char, 1, 0);
-            // if tt as *const _ == std::ptr::null()
-            // {
-            //     let mut bob = 3;
-            //     let mut bill = bob + 1;
-            //     bob = bob + bill;
-            // }
-
             return result;
             
         }
     }
 
-    // This has problems (always returns "null", no matter what file is attempted to open)
-    pub fn fopen(path: PathBuf, mode: u32, hints: u32) -> Result<(), ()> {
 
-        unsafe{
+    //simmilar to std::fs::File, but suckier because I made it.
+    pub struct RFile {
+        file_ptr: *mut FileHandle,
+        mode: FileAccessMode,
+    }
+    impl RFile {
 
-            //TEST
-            let mut pth2 = "./Maze.ch8".as_bytes();
-            let tt = (STATIC_VFS_CONTEXT.vfs_open)(pth2.as_ptr() as *const c_char, 1, 0);
-            if tt as *const _ == std::ptr::null()
-            {
-                let mut bob = 3;
-                let mut bill = bob + 1;
-                bob = bob + bill;
+        pub fn path(&self) -> Result<PathBuf, ()> {
+            unsafe {
+                let path_ptr = (STATIC_VFS_CONTEXT.vfs_get_path)(self.file_ptr);
+                let path_str = CStr::from_ptr(path_ptr).to_str();
+                if let Ok(path) = path_str {
+                    let pathbuffer = PathBuf::from(path);
+                    Ok(pathbuffer)
+                }
+                else {
+                    Err(())
+                }
 
             }
+        }
 
-            //ENDTEST
+        pub fn open(path: PathBuf, mode: FileAccessMode, hint: FileAccessHint) -> Result<RFile, ()>{
+            unsafe {
+                //need to do this because vfs expects a null terminated string, but PathBuf does not.
+                let path = String::from(path.to_str().unwrap()) + "\0";
+                let pth = path.as_bytes();
 
+                let file = (STATIC_VFS_CONTEXT.vfs_open)(pth.as_ptr() as *const c_char, mode as u32, hint as u32);
+                if file as *const _ == std::ptr::null() {
+                    return Err(())
+                }
 
+                Ok(RFile{
+                    file_ptr: file,
+                    mode: mode,
+                })
 
-            //let path = PathBuf::from("./Maze.ch8");
-
-            //need to do this because vfs expects a null terminated string, but PathBuf does not.
-            let path = String::from(path.to_str().unwrap()) + "\0";
-            let pth = path.as_bytes();
-
-
-            let file = (STATIC_VFS_CONTEXT.vfs_open)(pth.as_ptr() as *const c_char, mode, hints);
-
-            let rrt = (STATIC_VFS_CONTEXT.vfs_open) as *const u8;
-
-            if file as *const _ == std::ptr::null() {
-                let mut bob = 3;
-                let mut bill = bob + 1;
-                bob = bob + bill;
             }
-            let dir = "/\0".as_ptr() as *const _ as *const i8;
-            let mut dir_handle = (STATIC_VFS_CONTEXT.vfs_opendir)(dir, true);
-            
-            if dir_handle as *const _ == std::ptr::null() {
-                let mut bob = 3;
-                let mut bill = bob + 1;
-                bob = bob + bill;
+        }
+
+        pub fn size(&self) -> Result<i64, ()> {
+            unsafe{
+                //vfs_size does NOT seem to catch null pointers
+                let size = (STATIC_VFS_CONTEXT.vfs_size)(self.file_ptr);
+                if size == -1 {
+                    Err(())
+                }
+                else {
+                    Ok(size)
+                }
             }
+        }
 
-            {
-                let mut bob = 3;
-                let mut bill = bob + 1;
-                bob = bob + bill;
+        pub fn truncate(&self, size: i64) -> Result<(), ()> {
+            unsafe {
+                let result = (STATIC_VFS_CONTEXT.vfs_truncate)(self.file_ptr, size);
+                if result < 0 {
+                    Err(())
+                } else {
+                    Ok(())
+                }
             }
+        }
 
-            Ok(())
+        pub fn tell(&self) -> Result<i64, ()> {
+            unsafe {
+                let head_pos = (STATIC_VFS_CONTEXT.vfs_tell)(self.file_ptr);
+                if head_pos < 0 {
+                    Err(())
+                } else {
+                    Ok(head_pos)
+                }
+            }
+        }
 
+        pub fn seek(&self, seek: FileSeekPos, offset: i64) -> Result<i64, ()> {
+            unsafe {
+                let head_pos = (STATIC_VFS_CONTEXT.vfs_seek)(self.file_ptr, offset, seek as i32);
+                if head_pos < 0 {
+                    Err(())
+                } else {
+                    Ok(head_pos)
+                }
+            }
+        }
+
+        pub fn write(&self, data: &[u8]) -> Result<i64, ()> {
+            unsafe {
+                if (self.mode as u32 &
+                    ( FileAccessMode::AccessWrite as u32
+                    | FileAccessMode::AccessUpdateExisting as u32
+                    )) != 0 {
+
+                    let write_len = data.len() as u64;
+                    let bytes_written = (STATIC_VFS_CONTEXT.vfs_write)(self.file_ptr, data.as_ptr() as *const c_void, write_len);
+                    if bytes_written < 0 {
+                        Err(())
+                    } else {
+                        Ok(0)
+                    }
+                } else {
+                    Err(())
+                }
+
+
+            }
+        }
+
+        pub fn flush(&self) -> Result<(), ()> {
+            unsafe {
+                let result = (STATIC_VFS_CONTEXT.vfs_flush)(self.file_ptr);
+                if result < 0 {
+                    Err(())
+                } else {
+                    Ok(())
+                }
+            }
+        }
+
+        //Put these in seperate struct?
+        pub fn delete(path: PathBuf) -> Result<(), ()> {
+            unsafe {
+                let path = String::from(path.to_str().unwrap()) + "\0";
+                let pth = path.as_bytes();
+
+                let result = (STATIC_VFS_CONTEXT.vfs_remove)(pth.as_ptr() as *const c_char);
+                if result < 0 {
+                    Err(())
+                } else {
+                    Ok(())
+                }
+            }
+        }
+
+        pub fn rename(path: PathBuf, new_path: PathBuf) -> Result<(), ()> {
+            unsafe {
+                let path = String::from(path.to_str().unwrap()) + "\0";
+                let pth = path.as_bytes();
+
+                let new_path = String::from(new_path.to_str().unwrap()) + "\0";
+                let new_pth = new_path.as_bytes();
+
+                let result = (STATIC_VFS_CONTEXT.vfs_rename)(pth.as_ptr() as *const c_char, new_pth.as_ptr() as *const c_char);
+                if result < 0 {
+                    Err(())
+                } else {
+                    Ok(())
+                }
+            }
+        }
+
+        pub fn stat(path: PathBuf) -> Result<(i32, i32), ()> {
+            unsafe {
+                let path = String::from(path.to_str().unwrap()) + "\0";
+                let pth = path.as_bytes();
+
+                let mut size: i32 = 0;
+                //todo: bitfield result
+                let result = (STATIC_VFS_CONTEXT.vfs_stat)(pth.as_ptr() as *const c_char, &mut size);
+
+                Ok((result, size))
+            }
+        }
+
+
+    }
+    impl Drop for RFile {
+        fn drop(&mut self) {
+            unsafe {
+                (STATIC_VFS_CONTEXT.vfs_close)(self.file_ptr);
+            }
         }
     }
 
+    //todo: RDirectory
 
 
 }
@@ -1063,7 +1170,7 @@ pub fn key_pressed(port: u8, k: Key) -> bool {
     }
 }
 
-//get a path to the retroarch filesystem
+//get a path to the retroarch filesystem (good for BIOS, config data, etc.)
 pub fn get_system_directory() -> Option<PathBuf> {
     let mut path: *const c_char = ptr::null();
 
@@ -1082,6 +1189,28 @@ pub fn get_system_directory() -> Option<PathBuf> {
         None
     }
 }
+//get a path to the retroarch filesystem (good for save data)
+pub fn get_save_directory() -> Option<PathBuf> {
+    let mut path: *const c_char = ptr::null();
+
+    let success =
+        unsafe {
+            //request system directory and set the path pointer to the result
+            call_environment_mut(Environment::GetSaveDirectory,
+                                 &mut path)
+        };
+
+    if success && !path.is_null() {
+        let path = unsafe { CStr::from_ptr(path) };
+
+        build_path(path)
+    } else {
+        None
+    }
+}
+
+
+
 //set pixel mix type
 pub fn set_pixel_format(format: PixelFormat) -> bool {
     let f = format as c_uint;

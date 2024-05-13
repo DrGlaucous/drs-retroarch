@@ -1,7 +1,7 @@
 
 use std::path::{Path, PathBuf};
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::str::FromStr;
 use std::pin::Pin;
 use std::mem;
@@ -13,8 +13,8 @@ use gl::types::{GLsizei, GLuint, GLfloat, GLsizeiptr, GLint, GLchar};
 
 
 
-use crate::libretro::{self, gl_frame_done, retro_filesystem_context, variables_need_update};
-use crate::libretro::retro_filesystem_context::{FileHandle, DirHandle, FileAccessHint, FileAccessMode, FileSeekPos};
+use crate::libretro::{self, get_save_directory, get_system_directory, gl_frame_done, retro_filesystem_context, variables_need_update};
+use crate::libretro::retro_filesystem_context::{FileHandle, DirHandle, FileAccessHint, FileAccessMode, FileSeekPos, RFile};
 
 /// Static system information sent to the frontend on request
 pub const SYSTEM_INFO: libretro::SystemInfo = libretro::SystemInfo {
@@ -247,7 +247,28 @@ impl  Core  {
            return Err(());
         }
 
-        let tt = retro_filesystem_context::fopen(game_path, 1, 0);
+        let sys_dir = get_system_directory();
+        let save_dir = get_save_directory();
+
+        {
+            //note: io::File *can* take relative directories
+            let file = File::open(game_path.clone());
+            if let Ok(mut file) = file {
+                file.seek(SeekFrom::End(0));
+                let sze = file.stream_position().unwrap();
+
+                let buster = sze + 1;
+
+            }
+        }
+
+        //let tt = retro_filesystem_context::fopen(game_path, 1, 0);
+        let tt = RFile::open(game_path, FileAccessMode::AccessRead, FileAccessHint::HintNone);
+        if let Ok(fl) = tt {
+            let file_loc = fl.path().unwrap();
+            let fsizee = fl.size().unwrap();
+            let bill = fsizee + 1;
+        }
 
 
         //random unrealted testing stuff:

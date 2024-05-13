@@ -8,11 +8,14 @@ This repo is a "fork" of the [d-rs engine](https://github.com/doukutsu-rs/doukut
 - [x] Screen drawing (openGL)
 - [ ] Screen drawing (openGLES)
 - [ ] Screen drawing (software?)
-- [ ] Screen rescaling
+- [x] Screen rescaling *(see core display settings)*
 - [x] Game timing
-- [ ] Audio
+- [x] Audio
 - [ ] V-Sync support
-- [ ] Core restarting
-- [ ] Input
-- [ ] Setting sync and adjustments
+- [x] Core restarting
+- [x] Input (Keyboard)
+- [ ] Input (Gamepad) *(partially working)* 
+- [x] Core display settings (aspect ratio, scale, etc.)
+- [ ] Filesystem
+
 
