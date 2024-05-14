@@ -21,7 +21,7 @@ use doukutsu_rs::scene::title_scene;
 use doukutsu_rs::game::shared_game_state::SharedGameState;
 use doukutsu_rs::sound::backend_libretro::{OutputBufConfig, Runner};
 
-use crate::libretro::{self, button_pressed, gl_frame_done, joypad_rumble_context, key_pressed, send_audio_samples, set_geometry, Key, JoyPadButton};
+use crate::libretro::{self, button_pressed, get_save_directory, get_system_directory, gl_frame_done, joypad_rumble_context, key_pressed, send_audio_samples, set_geometry, JoyPadButton, Key};
 
 /// Static system information sent to the frontend on request
 pub const SYSTEM_INFO: libretro::SystemInfo = libretro::SystemInfo {
@@ -44,7 +44,7 @@ pub fn load_game(target: PathBuf) -> Option<Box<dyn libretro::Context>> {
     log::info!("Loading {:?}", target); //info!
 
     //todo: get disk into there
-    Core::new().ok()
+    Core::new(target).ok()
         .map(|c| Box::new(c) as Box<dyn libretro::Context>)
 }
 
@@ -166,7 +166,7 @@ struct Core<'a>  {
 
 impl<'a>  Core<'a>  {
 
-    fn new() -> Result<Core<'a>, ()>{
+    fn new(target: PathBuf) -> Result<Core<'a>, ()>{
 
         //initialize the hardware backends
         if !libretro::set_pixel_format(libretro::PixelFormat::Xrgb8888) {
@@ -180,13 +180,14 @@ impl<'a>  Core<'a>  {
             return Err(());
         }
 
+        //the value of 50 here is arbitrary (in micros). Bigger numbers mean the mainloop will be called less often.
         if !libretro::register_frame_time_callback(50) {
             log::warn!("Failed to init delta frame counter");
             return Err(());
         }
 
         let async_audio_enabled = if !libretro::async_audio_context::register_async_audio_callback() {
-            log::warn!("Failed to init async audio, falling back to synchronous?");
+            log::warn!("Failed to init async audio, falling back to synchronous?"); //todo: implement synchronous audio
             false
         } else {true};
 
@@ -199,6 +200,7 @@ impl<'a>  Core<'a>  {
         let get_current_framebuffer: fn() -> usize = libretro::hw_context::get_current_framebuffer;
         let get_proc_address: fn(&str) -> *const c_void = libretro::hw_context::get_proc_address;
 
+        //create a hook to grab the audio backend from shared_game_state
         let mut audio_runner: Option<Runner> = None;
         let sound_config = OutputBufConfig {
             sample_rate: 44_100.0,
@@ -206,11 +208,36 @@ impl<'a>  Core<'a>  {
             runner_out: &mut audio_runner,
         };
 
+        //target is assumed to be either the exe OR the directory containing the data folder "./folder/Doukutsu.exe" or "./folder/" (for cs-switch)
+        
+        let mut resource_dir = target;
+        // If it's targeting the actual file, remove the file refrence for just the raw directory.
+        if resource_dir.is_file() {
+            let _ = resource_dir.pop();
+        }
+        resource_dir.push("data");
+
+        //set path for the game saves. If we can, start by putting the saves in the global retroarch directory. If not, put it in the portable directory
+        let user_dir = if let Some(dir) = get_save_directory() {dir} else {
+            log::warn!("Failed to get save directory. Using portable directory.");
+            let mut usr_target = resource_dir.clone();//.pop().push("user");
+            let _ = usr_target.pop();
+
+            usr_target.push("user");
+            usr_target
+        };
+
+
+        //user_dir is either "/path_to_libretro/saves/d-rs/" [or] "/path_to_executable/user/"
+        //resource_dir is "/path_to_executable/data/"
+
         let options = doukutsu_rs::game::LaunchOptions {
             server_mode: false,
             editor: false,
             return_types: true,
             external_timer: true,
+            resource_dir: Some(resource_dir),
+            usr_dir: Some(user_dir),
             audio_config: sound_config,
         };
 
@@ -311,8 +338,8 @@ impl<'a>  Core<'a>  {
                 // this base value is not really important
                 base_width: max_width,
                 base_height: max_height,
-                max_width: max_width,
-                max_height: max_height,
+                max_width: HEIGHT * 3 * 21 / 9, // widest aspect ratio at largest scale, any smaller and we'd get edge clipping at this larger scale.
+                max_height: HEIGHT * 3, // note: we could also forego this with backend reinitialization, but that's slow and process-heavy
                 aspect_ratio: (max_width as f32)/(max_height as f32),
             },
             timing: libretro::SystemTiming {

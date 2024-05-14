@@ -10,6 +10,8 @@ use crate::{
     },
 };
 
+use super::LaunchOptions;
+
 pub struct FilesystemContainer {
     pub user_path: PathBuf,
     pub game_path: PathBuf,
@@ -23,7 +25,43 @@ impl FilesystemContainer {
     }
 
     //todo: pass correct libretro path into here (or fake libretro filesystem, need a physicalFS wrapper for that if we're going to use it)
-    pub fn mount_fs(&mut self, context: &mut Context) -> GameResult {
+    #[allow(unused)]
+    pub fn mount_fs(&mut self, context: &mut Context, options: &mut LaunchOptions) -> GameResult {
+
+        if options.usr_dir.is_some() && options.resource_dir.is_some() {
+            log::info!("Initializing engine with pre-provided paths...");
+            
+            let resource_dir = options.resource_dir.clone().unwrap();
+            let user_dir = options.usr_dir.clone().clone().unwrap();
+
+            // let mut usr_dir_pop = user_dir.clone();
+            // let mut res_dir_pop = resource_dir.clone();
+            // let _ = usr_dir_pop.pop();
+            // let _ = res_dir_pop.pop();
+            // //[resource parent dir] and [user parent dir] are the same, we're using the portable option
+            // if usr_dir_pop == res_dir_pop {
+            //     self.is_portable = true;
+            // }
+            if  user_dir.ends_with("user") {
+                self.is_portable = true;
+            }
+
+            mount_vfs(context, Box::new(PhysicalFS::new(&resource_dir, true)));
+            self.game_path = resource_dir.clone();
+            log::info!("Resource directory: {:?}", resource_dir);
+
+            mount_user_vfs(context, Box::new(PhysicalFS::new(&user_dir, false)));
+            self.user_path = user_dir.clone();
+            log::info!("User directory: {:?}", user_dir);
+
+
+            log::info!("Mounting built-in FS");
+            mount_vfs(context, Box::new(BuiltinFS::new()));
+
+            return Ok(())
+
+        }
+
 
         //set up data directory
         #[cfg(not(any(target_os = "android", target_os = "horizon")))]

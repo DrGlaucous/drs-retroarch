@@ -7,7 +7,7 @@ use std::{
 
 use byteorder::{LE, WriteBytesExt};
 
-use crate::data::exe_parser::ExeParser;
+use crate::{data::exe_parser::ExeParser, game::LaunchOptions};
 use crate::framework::{
     context::Context,
     error::{GameError::ParseError, GameResult},
@@ -26,9 +26,12 @@ const VANILLA_STAGE_OFFSET: u32 = 0x937B0;
 const VANILLA_STAGE_TABLE_SIZE: u32 = VANILLA_STAGE_COUNT * VANILLA_STAGE_ENTRY_SIZE;
 
 impl VanillaExtractor {
-    pub fn from(ctx: &mut Context, exe_name: String, data_base_dir: String) -> Option<Self> {
+    pub fn from(ctx: &mut Context, exe_name: String, data_base_dir: String, launch_options: &mut LaunchOptions) -> Option<Self> {
         #[cfg(not(any(target_os = "android", target_os = "horizon")))]
-        let mut vanilla_exe_path = env::current_dir().unwrap();
+        let mut vanilla_exe_path = if let Some(mut resource_dir) = launch_options.resource_dir.clone() {
+            resource_dir.pop(); //if this is provided, it will end in "/data/"
+            resource_dir
+        } else {env::current_dir().unwrap()};
 
         #[cfg(target_os = "android")]
         let mut vanilla_exe_path = PathBuf::from(ndk_glue::native_activity().internal_data_path().to_string_lossy().to_string());

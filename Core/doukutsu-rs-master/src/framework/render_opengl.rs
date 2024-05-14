@@ -825,14 +825,20 @@ impl BackendRenderer for OpenGLRenderer {
             if let Some((_, gl)) = self.get_context() {
                 handle_err(gl, 0);
 
-                // dump_texture(
-                //     self.render_data.surf_texture,
-                //     Some(self.render_data.surf_framebuffer),
-                //     self.render_data.last_size.0,
-                //     self.render_data.last_size.1,
-                //     "./RenderDta.bmp",
-                //     gl);
-                
+                //framebuffer here is not cropped.
+                // let mut bob = self.render_data.last_size.0;
+                // if bob == 1 {
+                //     bob += 1;
+                //     dump_texture(
+                //         self.render_data.surf_texture,
+                //         Some(self.render_data.surf_framebuffer),
+                //         self.render_data.last_size.0,
+                //         self.render_data.last_size.1,
+                //         "./JScreen.bmp",
+                //         gl);
+                // }
+
+
                 //Bind the output framebuffer provided by the frontend
                 //let fbo = self.get_screen_fb();
                 let fbo = if let Some((context, _)) = self.get_context() {
@@ -843,7 +849,7 @@ impl BackendRenderer for OpenGLRenderer {
 
                 gl.gl.BindFramebuffer(gl::FRAMEBUFFER, fbo);
 
-                //gl.gl.Viewport(0, 0, (640) as GLsizei, (240) as GLsizei);
+                gl.gl.Viewport(0, 0, (self.render_data.last_size.0) as GLsizei, (self.render_data.last_size.1) as GLsizei);
 
 
                 gl.gl.ClearColor(0.0, 0.0, 0.0, 1.0);

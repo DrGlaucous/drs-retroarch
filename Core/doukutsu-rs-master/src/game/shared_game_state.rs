@@ -371,7 +371,7 @@ impl SharedGameState {
 
         #[cfg(not(target_os = "horizon"))]
         if let Some(vanilla_extractor) =
-            VanillaExtractor::from(ctx, vanilla_ext_exe.to_string(), vanilla_ext_outdir.to_string())
+            VanillaExtractor::from(ctx, vanilla_ext_exe.to_string(), vanilla_ext_outdir.to_string(), launch_options)
         {
             let result = vanilla_extractor.extract_data();
             if let Err(e) = result {

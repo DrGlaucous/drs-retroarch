@@ -41,6 +41,8 @@ pub struct LaunchOptions {
     pub editor: bool,
     pub return_types: bool,
     pub external_timer: bool,
+    pub game_path: Option<PathBuf>, //where the game should be loaded from
+    pub user_dir: Option<PathBuf>, //where the saves should be placed
 }
 
 //todo: There HAS to be a better way to do this...
@@ -50,6 +52,8 @@ pub struct LaunchOptions <'a>{
     pub editor: bool,
     pub return_types: bool,
     pub external_timer: bool,
+    pub usr_dir: Option<PathBuf>, //where the game should be loaded from
+    pub resource_dir: Option<PathBuf>, //where the saves should be placed
     pub audio_config: sound::backend_libretro::OutputBufConfig<'a>, //audio config to be handed down to the shared state
 }
 
@@ -338,19 +342,20 @@ fn init_logger() -> GameResult {
 }
 
 pub fn init(options: LaunchOptions) -> GameResult<(Option<Pin<Box<Game>>>, Option<Pin<Box<Context>>>)> {
+    let mut options = options;
+
     let _ = init_logger();
     
     let mut context = Box::pin(Context::new());
 
     let mut fs_container = FilesystemContainer::new();
-    fs_container.mount_fs(&mut context)?;
+    fs_container.mount_fs(&mut context, &mut options)?;
     
     if options.server_mode {
         log::info!("Running in server mode...");
         context.headless = true;
     }
 
-    let mut options = options;
     let mut game = Box::pin(Game::new(&mut context, &mut options)?);
     #[cfg(feature = "scripting-lua")]
     unsafe {
