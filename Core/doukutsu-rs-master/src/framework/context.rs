@@ -11,7 +11,7 @@ use super::backend::Backend;
 use super::backend::BackendEventLoop;
 
 #[cfg(feature = "backend-libretro")]
-use crate::framework::backend_libretro::{LibretroBackend, LibretroEventLoop};
+use crate::framework::backend_libretro::{LibretroBackend, LibretroEventLoop, RenderMode};
 
 pub struct Context {
     pub headless: bool,
@@ -56,11 +56,12 @@ impl Context {
     pub fn create_backend(&mut self, _game: &mut Game,
         get_current_framebuffer: fn() -> usize,
         get_proc_address: fn(&str) -> *const c_void,
+        render_mode: RenderMode,
     ) -> GameResult<(Box<LibretroBackend>, Box<LibretroEventLoop>)> {
 
         //force libretro type (no dyns) (could also use downcasting...)
         let backend = LibretroBackend::new_nd()?;
-        let mut event_loop = backend.create_event_loop_nd(self, get_current_framebuffer, get_proc_address)?;
+        let mut event_loop = backend.create_event_loop_nd(self, get_current_framebuffer, get_proc_address, render_mode)?;
         
         //we break this out as libretro requires it.
         //self.renderer = Some(event_loop.new_renderer(self as *mut Context)?);

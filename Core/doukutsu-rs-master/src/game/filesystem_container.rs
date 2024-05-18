@@ -28,7 +28,101 @@ impl FilesystemContainer {
     #[allow(unused)]
     pub fn mount_fs(&mut self, context: &mut Context, options: &mut LaunchOptions) -> GameResult {
 
-        if options.usr_dir.is_some() && options.resource_dir.is_some() {
+        log::info!("Mounting Filesystem...");
+
+        //"normal" filesystems
+        #[cfg(any(not(any(target_os = "android", target_os = "horizon")), feature = "backend-libretro"))]
+        {
+            //set up data directory
+            let resource_dir = if let Ok(data_dir) = std::env::var("CAVESTORY_DATA_DIR") {
+                PathBuf::from(data_dir)
+            } else if options.resource_dir.is_some() {
+                let resource_dir = options.resource_dir.clone().unwrap(); //should already contain "data" subdirectory
+                log::info!("Using pre-provided resource directory path.");
+                resource_dir
+            } else {
+                let mut resource_dir = std::env::current_exe()?;
+                if resource_dir.file_name().is_some() {
+                    let _ = resource_dir.pop();
+                }
+
+                #[cfg(target_os = "macos")]
+                {
+                    let mut bundle_dir = resource_dir.clone();
+                    let _ = bundle_dir.pop();
+                    let mut bundle_exec_dir = bundle_dir.clone();
+                    let mut csplus_data_dir = bundle_dir.clone();
+                    let _ = csplus_data_dir.pop();
+                    let _ = csplus_data_dir.pop();
+                    let mut csplus_data_base_dir = csplus_data_dir.clone();
+                    csplus_data_base_dir.push("data");
+                    csplus_data_base_dir.push("base");
+
+                    bundle_exec_dir.push("MacOS");
+                    bundle_dir.push("Resources");
+
+                    if bundle_exec_dir.is_dir() && bundle_dir.is_dir() {
+                        log::info!("Running in macOS bundle mode");
+
+                        if csplus_data_base_dir.is_dir() {
+                            log::info!("Cave Story+ Steam detected");
+                            resource_dir = csplus_data_dir;
+                        } else {
+                            resource_dir = bundle_dir;
+                        }
+                    }
+                }
+
+                resource_dir.push("data");
+                resource_dir
+            };
+
+            self.game_path = resource_dir.clone();
+            mount_vfs(context, Box::new(PhysicalFS::new(&self.game_path, true)));
+            log::info!("Resource directory: {:?}", self.game_path);
+
+
+            //set up user directory
+            let mut user_dir = resource_dir.clone();
+            user_dir.pop();
+            user_dir.push("user");
+
+            if user_dir.is_dir() {
+                // portable mode
+                self.user_path = user_dir.clone();
+                self.is_portable = true;
+            } else if options.usr_dir.is_some() {
+
+                let user_dir = options.usr_dir.clone().unwrap();
+                if  user_dir.ends_with("user") {
+                    self.is_portable = true;
+                }
+                self.user_path = user_dir.clone();
+
+            } else {
+
+                //where the user directory should be if not portable
+                let project_dirs = match directories::ProjectDirs::from("", "", "doukutsu-rs") {
+                    Some(dirs) => dirs,
+                    None => {
+                        use crate::framework::error::GameError;
+                        return Err(GameError::FilesystemError(String::from(
+                            "No valid home directory path could be retrieved.",
+                        )));
+                    }
+                };
+
+                let user_dir = project_dirs.data_local_dir();
+                self.user_path = user_dir.to_path_buf();
+            }
+
+            mount_user_vfs(context, Box::new(PhysicalFS::new(&self.user_path, false)));
+            log::info!("User directory: {:?}", self.user_path);
+
+
+        }
+
+        /*if options.usr_dir.is_some() && options.resource_dir.is_some() {
             log::info!("Initializing engine with pre-provided paths...");
             
             let resource_dir = options.resource_dir.clone().unwrap();
@@ -60,72 +154,11 @@ impl FilesystemContainer {
 
             return Ok(())
 
-        }
+        }*/
 
-
-        //set up data directory
-        #[cfg(not(any(target_os = "android", target_os = "horizon")))]
-        let resource_dir = if let Ok(data_dir) = std::env::var("CAVESTORY_DATA_DIR") {
-            PathBuf::from(data_dir)
-        } else {
-            let mut resource_dir = std::env::current_exe()?;
-            if resource_dir.file_name().is_some() {
-                let _ = resource_dir.pop();
-            }
-
-            #[cfg(target_os = "macos")]
-            {
-                let mut bundle_dir = resource_dir.clone();
-                let _ = bundle_dir.pop();
-                let mut bundle_exec_dir = bundle_dir.clone();
-                let mut csplus_data_dir = bundle_dir.clone();
-                let _ = csplus_data_dir.pop();
-                let _ = csplus_data_dir.pop();
-                let mut csplus_data_base_dir = csplus_data_dir.clone();
-                csplus_data_base_dir.push("data");
-                csplus_data_base_dir.push("base");
-
-                bundle_exec_dir.push("MacOS");
-                bundle_dir.push("Resources");
-
-                if bundle_exec_dir.is_dir() && bundle_dir.is_dir() {
-                    log::info!("Running in macOS bundle mode");
-
-                    if csplus_data_base_dir.is_dir() {
-                        log::info!("Cave Story+ Steam detected");
-                        resource_dir = csplus_data_dir;
-                    } else {
-                        resource_dir = bundle_dir;
-                    }
-                }
-            }
-
-            resource_dir.push("data");
-            resource_dir
-        };
-
-        #[cfg(not(any(target_os = "android", target_os = "horizon")))]
-        log::info!("Resource directory: {:?}", resource_dir);
-
-        log::info!("Initializing engine...");
-
-        #[cfg(not(any(target_os = "android", target_os = "horizon")))]
-        {
-            mount_vfs(context, Box::new(PhysicalFS::new(&resource_dir, true)));
-            self.game_path = resource_dir.clone();
-        }
-
-        #[cfg(not(any(target_os = "android", target_os = "horizon")))]
-        let project_dirs = match directories::ProjectDirs::from("", "", "doukutsu-rs") {
-            Some(dirs) => dirs,
-            None => {
-                use crate::framework::error::GameError;
-                return Err(GameError::FilesystemError(String::from(
-                    "No valid home directory path could be retrieved.",
-                )));
-            }
-        };
-        #[cfg(target_os = "android")]
+        
+        //non-standard filesystems
+        #[cfg(all(target_os = "android", not(feature = "backend-libretro")))]
         {
             let mut data_path =
                 PathBuf::from(ndk_glue::native_activity().internal_data_path().to_string_lossy().to_string());
@@ -145,7 +178,7 @@ impl FilesystemContainer {
             self.user_path = user_path.clone();
             self.game_path = data_path.clone();
         }
-        #[cfg(target_os = "horizon")]
+        #[cfg(all(target_os = "horizon", not(feature = "backend-libretro")))]
         {
             let mut data_path = PathBuf::from("sdmc:/switch/doukutsu-rs/data");
             let mut user_path = PathBuf::from("sdmc:/switch/doukutsu-rs/user");
@@ -166,25 +199,6 @@ impl FilesystemContainer {
             self.game_path = data_path.clone();
         }
 
-        //set up user directory
-        #[cfg(not(any(target_os = "android", target_os = "horizon")))]
-        {
-            let mut user_dir = resource_dir.clone();
-            user_dir.pop();
-            user_dir.push("user");
-
-            if user_dir.is_dir() {
-                // portable mode
-                mount_user_vfs(context, Box::new(PhysicalFS::new(&user_dir, false)));
-                self.user_path = user_dir.clone();
-                self.is_portable = true;
-            } else {
-                let user_dir = project_dirs.data_local_dir();
-                mount_user_vfs(context, Box::new(PhysicalFS::new(user_dir, false)));
-
-                self.user_path = user_dir.to_path_buf();
-            }
-        }
 
         log::info!("Mounting built-in FS");
         mount_vfs(context, Box::new(BuiltinFS::new()));

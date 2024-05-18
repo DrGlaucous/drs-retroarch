@@ -11,7 +11,7 @@ use std::ffi::c_void;
 
 
 //use doukutsu_rs::framework::backend::BackendEventLoop;
-use doukutsu_rs::framework::backend_libretro::{LibretroEventLoop, LibretroBackend};
+use doukutsu_rs::framework::backend_libretro::{LibretroEventLoop, LibretroBackend, RenderMode};
 use doukutsu_rs::framework::backend::{BackendEventLoop, Backend};
 use doukutsu_rs::framework::keyboard::ScanCode;
 use doukutsu_rs::framework::gamepad::Button;
@@ -21,13 +21,25 @@ use doukutsu_rs::scene::title_scene;
 use doukutsu_rs::game::shared_game_state::SharedGameState;
 use doukutsu_rs::sound::backend_libretro::{OutputBufConfig, Runner};
 
-use crate::libretro::{self, button_pressed, get_save_directory, get_system_directory, gl_frame_done, joypad_rumble_context, key_pressed, send_audio_samples, set_geometry, JoyPadButton, Key};
+use crate::libretro::{self,
+    hw_context::ContextType,
+    button_pressed,
+    get_save_directory,
+    get_system_directory,
+    gl_frame_done,
+    joypad_rumble_context,
+    key_pressed,
+    send_audio_samples,
+    set_geometry,
+    JoyPadButton,
+    Key
+};
 
 /// Static system information sent to the frontend on request
 pub const SYSTEM_INFO: libretro::SystemInfo = libretro::SystemInfo {
     library_name: cstring!("d-rs"),
     library_version: "0.0.1" as *const _ as *const c_char,
-    valid_extensions: cstring!("exe"),
+    valid_extensions: cstring!("exe"),//cstring!(".exe"),
     need_fullpath: true,
     block_extract: false,
 };
@@ -55,17 +67,6 @@ pub fn init() {
 pub fn init_variables() {
  CoreVariables::register();
 }
-
-// Precise FPS values for the video output for the given
-// VideoClock. It's actually possible to configure the PlayStation GPU
-// to output with NTSC timings with the PAL clock (and vice-versa)
-// which would make this code invalid but it wouldn't make a lot of
-// sense for a game to do that.
-pub enum VideoClock {
-    Ntsc,
-    Pal,
-}
-
 
 //get the current state of the backend's video settings (placeholder for now...)
 // fn get_av_info(fps: f32, resolution: (u32, u32), upscaling: u32) -> libretro::SystemAvInfo {
@@ -155,7 +156,6 @@ struct Core<'a>  {
     state_ref: &'a mut SharedGameState,
     pub game: Pin<Box<Game>>,
     pub context: Pin<Box<Context>>,	
-
     screen_width: u32,
     screen_height: u32,
 
@@ -174,10 +174,15 @@ impl<'a>  Core<'a>  {
             return Err(());
         }
 
-        //todo! make ContextType dynamic so we can run with gles as well
-        if !libretro::hw_context::init() {
-            log::warn!("Failed to init hardware context");
-            return Err(());
+        let mut render_mode = RenderMode::OpenGl;
+        if !libretro::hw_context::init(ContextType::OpenGlCore, 2, 1) {
+            render_mode = RenderMode::OpenGlES;
+            if !libretro::hw_context::init(ContextType::OpenGlEs2, 2, 1) {
+                log::warn!("Failed to init hardware context");
+                //todo: full software rendering support, but for now, error out.
+                return Err(());
+            }
+
         }
 
         //the value of 50 here is arbitrary (in micros). Bigger numbers mean the mainloop will be called less often.
@@ -248,7 +253,7 @@ impl<'a>  Core<'a>  {
 		let game_ptr = game.as_mut().get_mut();
 
 
-		let (backend, mut event_loop) = context.create_backend(game_ptr, get_current_framebuffer, get_proc_address).unwrap();
+		let (backend, mut event_loop) = context.create_backend(game_ptr, get_current_framebuffer, get_proc_address, render_mode).unwrap();
 
         let state_ref = unsafe {&mut *game.state.get()};
 
@@ -279,7 +284,6 @@ impl<'a>  Core<'a>  {
             game,
             screen_height: initial_height,
             screen_width: initial_width,
-
             async_audio_enabled,
             delta_time: 0,
             audio_runner: audio_runner.unwrap(),

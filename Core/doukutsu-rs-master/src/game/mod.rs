@@ -18,6 +18,8 @@ use crate::game::shared_game_state::{Fps, SharedGameState, TimingMode};
 use crate::graphics::texture_set::{G_MAG, I_MAG};
 use crate::scene::loading_scene::LoadingScene;
 use crate::scene::Scene;
+
+#[cfg(feature = "backend-libretro")]
 use crate::sound;
 
 pub mod caret;
@@ -41,8 +43,8 @@ pub struct LaunchOptions {
     pub editor: bool,
     pub return_types: bool,
     pub external_timer: bool,
-    pub game_path: Option<PathBuf>, //where the game should be loaded from
-    pub user_dir: Option<PathBuf>, //where the saves should be placed
+    pub usr_dir: Option<PathBuf>, //where the game should be loaded from
+    pub resource_dir: Option<PathBuf>, //where the saves should be placed
 }
 
 //todo: There HAS to be a better way to do this...

@@ -48,7 +48,7 @@ enum MainMenuEntry {
 
 impl Default for MainMenuEntry {
     fn default() -> Self {
-        #[cfg(target_os = "android")]
+        #[cfg(all(target_os = "android", not(feature = "backend-libretro")))]
         return MainMenuEntry::DisplayTouchControls;
 
         #[cfg(not(target_os = "android"))]

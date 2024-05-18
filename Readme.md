@@ -17,5 +17,10 @@ This repo is a "fork" of the [d-rs engine](https://github.com/doukutsu-rs/doukut
 - [ ] Input (Gamepad) *(partially working)* 
 - [x] Core display settings (aspect ratio, scale, etc.)
 - [x] Filesystem
-
+- [ ] Platforms
+  - [x] Windows
+  - [ ] Linux
+  - [ ] Mac OS
+  - [ ] Android
+  - [ ] iOS
 

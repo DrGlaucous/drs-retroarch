@@ -486,8 +486,12 @@ pub mod hw_context {
         debug_context: false,
     };
 
-    pub fn init() -> bool {
+    pub fn init(gl_context_type: ContextType, version_maj: u32, version_min: u32) -> bool {
         unsafe {
+            STATIC_HW_CONTEXT.context_type = gl_context_type;
+            STATIC_HW_CONTEXT.version_major = version_maj;
+            STATIC_HW_CONTEXT.version_minor = version_min;
+
             call_environment_mut(Environment::SetHwRender,
                 &mut STATIC_HW_CONTEXT)
         }
@@ -1044,6 +1048,7 @@ pub mod retro_filesystem_context {
 
         pub fn rename(path: PathBuf, new_path: PathBuf) -> Result<(), ()> {
             unsafe {
+                //todo: use cstring!()
                 let path = String::from(path.to_str().unwrap()) + "\0";
                 let pth = path.as_bytes();
 

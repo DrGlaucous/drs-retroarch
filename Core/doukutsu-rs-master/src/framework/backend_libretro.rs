@@ -41,6 +41,14 @@ use crate::game::Game;
 use super::keyboard::ScanCode;
 use super::gamepad::Button;
 
+#[derive(PartialEq)]
+pub enum RenderMode {
+    None,
+    OpenGl,
+    OpenGlES,
+    Software,
+}
+
 pub struct LibretroBackend;
 
 impl LibretroBackend {
@@ -55,8 +63,9 @@ impl LibretroBackend {
     pub fn create_event_loop_nd(&self, _ctx: &Context,
         get_current_framebuffer: fn() -> usize,
         get_proc_address: fn(&str) -> *const c_void,
+        render_mode: RenderMode,
     ) -> GameResult<Box<LibretroEventLoop>> {
-        Ok(LibretroEventLoop::new(get_current_framebuffer, get_proc_address).unwrap())
+        Ok(LibretroEventLoop::new(get_current_framebuffer, get_proc_address, render_mode).unwrap())
     }
 
 }
@@ -75,7 +84,8 @@ impl Backend for LibretroBackend {
 
 
 pub struct LibretroEventLoop {
-    refs: Rc<RefCell<LibretroContext>>
+    refs: Rc<RefCell<LibretroContext>>,
+    render_mode: RenderMode
 }
 
 //holds things like openGL renderer, keystrokes, and audio? (maybe?)
@@ -90,13 +100,15 @@ impl LibretroEventLoop {
     pub fn new(
         get_current_framebuffer: fn() -> usize,
         get_proc_address: fn(&str) -> *const c_void,
+        render_mode: RenderMode,
     ) -> GameResult<Box<LibretroEventLoop>>
     {
         let event_loop = LibretroEventLoop {
             refs: Rc::new(RefCell::new(LibretroContext{
                 get_current_framebuffer,
                 get_proc_address
-            }))
+            })),
+            render_mode: render_mode,
         };
 
         Ok(Box::new(event_loop))
@@ -256,7 +268,7 @@ impl BackendEventLoop for LibretroEventLoop {
         }
 
 
-        let gl_context = GLContext { gles2_mode: false, is_sdl: false, get_proc_address, swap_buffers, get_current_buffer, user_data, ctx };
+        let gl_context = GLContext { gles2_mode: (self.render_mode == RenderMode::OpenGlES), is_sdl: false, get_proc_address, swap_buffers, get_current_buffer, user_data, ctx };
         //let gl_context = GLContext { gles2_mode: false, is_sdl: false, get_proc_address, swap_buffers, user_data, ctx };
 
         //Err(super::error::GameError::CommandLineError(("Not Done Yet!".to_owned())))//=>{log::error!("not done yet!")}

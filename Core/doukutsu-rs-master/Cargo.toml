@@ -55,7 +55,7 @@ android = []
 
 #new stuff
 audio-cpal = ["cpal"]
-backend-libretro = ["libretro-rs", "render-opengl"]
+backend-libretro = ["render-opengl"]
 
 
 [dependencies]
@@ -103,7 +103,7 @@ xmltree = "0.10"
 
 
 #for libretro
-libretro-rs = { path = "../libretro-rs-master/libretro-rs", optional = true, features = ["experimental"] }
+#libretro-rs = { path = "../libretro-rs-master/libretro-rs", optional = true, features = ["experimental"] }
 
 
 #hack to not link SDL_image on Windows(causes a linker error)
