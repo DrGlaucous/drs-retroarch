@@ -174,8 +174,9 @@ impl<'a>  Core<'a>  {
             return Err(());
         }
 
+        //try different openGL versions
         let mut render_mode = RenderMode::OpenGl;
-        if !libretro::hw_context::init(ContextType::OpenGlCore, 2, 1) {
+        if !libretro::hw_context::init(ContextType::OpenGlCore, 3, 0) {
             render_mode = RenderMode::OpenGlES;
             if !libretro::hw_context::init(ContextType::OpenGlEs2, 2, 1) {
                 log::warn!("Failed to init hardware context");
@@ -386,8 +387,8 @@ impl<'a>  libretro::Context  for Core<'a>  {
     fn render_frame(&mut self) {
 
 
-        self.poll_keys();
-        //self.poll_gamepad(); //todo: enable this (currently having controller mapping problems where it conflicts with the keyboard)
+        //self.poll_keys();
+        self.poll_gamepad(); //todo: enable this (currently having controller mapping problems where it conflicts with the keyboard)
 
 
         self.event_loop.update(self.state_ref, self.game.as_mut().get_mut(), &mut self.context, self.delta_time as u64);
