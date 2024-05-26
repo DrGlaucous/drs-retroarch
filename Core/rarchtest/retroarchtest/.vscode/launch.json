@@ -15,14 +15,56 @@
                     "--lib",
                     "--package=lttest"
                 ],
-                // "filter": {
-                //     "name": "lttest",
-                //     "kind": "lib"
-                // }
+                "filter": {
+                    "name": "lttest",
+                    //"kind": "lib"
+                }
             },           
             //starting in the 'example' folder, output is in the parent's 'test' folder
-            "program": "${workspaceFolder}/../../../Engine/RetroArch-Win64/retroarch.exe",
-            "args": ["--verbose", "-L", "./target/debug/lttest.dll", "./Maze.ch8"],
+            "program": "${workspaceFolder}/../../../../../BuildTesting/RetroarchPi/RetroArch/retroarch",
+            "args": ["--verbose", "-L", "./target/debug/liblttest.so", "Maze.ch8"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Retroarch 1.9.0",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=drsretroarch"
+                ],
+                "filter": {
+                    "name": "drsretroarch",
+                    "kind": "lib"
+                }
+            },           
+            //starting in the 'example' folder, output is in the parent's 'test' folder
+            "program": "${workspaceFolder}/../../../Engine/1.9.0/RetroArch/retroarch.exe",
+            "args": ["--verbose", "-L", "./target/debug/drsretroarch.dll", "../../CaveStory/Doukutsu.exe"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Retroarch_Angle (openglES)",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=drsretroarch"
+                ],
+                "filter": {
+                    "name": "drsretroarch",
+                    "kind": "lib"
+                }
+            },           
+            //starting in the 'example' folder, output is in the parent's 'test' folder
+            "program": "${workspaceFolder}/../../../Engine/1.9.0/RetroArch/retroarch_angle.exe",
+            "args": ["--verbose", "-L", "./target/debug/drsretroarch.dll", "../../CaveStory/Doukutsu.exe"],
             "cwd": "${workspaceFolder}"
         }
     ]

@@ -11,9 +11,10 @@ use std::ffi::c_void;
 use gl;
 use gl::types::{GLsizei, GLuint, GLfloat, GLsizeiptr, GLint, GLchar};
 
+use std::ffi::{CStr, CString};
 
 
-use crate::libretro::{self, get_save_directory, get_system_directory, gl_frame_done, retro_filesystem_context, variables_need_update};
+use crate::libretro::{self, get_save_directory, get_system_directory, gl_frame_done, retro_filesystem_context, variables_need_update, log as rlog, log::Level};
 use crate::libretro::retro_filesystem_context::{FileHandle, DirHandle, FileAccessHint, FileAccessMode, FileSeekPos, RFile};
 
 /// Static system information sent to the frontend on request
@@ -54,16 +55,52 @@ const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
 
-pub fn handle_err() {
+pub fn handle_err(id: f32) -> bool {
     
     unsafe{
         let err = gl::GetError();
 
         if err != 0 {
-            log::error!("OpenGL error: {}", err);
+            //log::error!("OpenGL error: {}", err);
+            rlog::log(Level::Error, format!("OpenGL error: {} || at: {}", err, id).as_str());
+            return true;
         }
     }
+    false
 
+}
+
+
+fn check_shader_compile_status(shader: u32) {
+    unsafe {
+        rlog::log(Level::Debug, format!("Checking shader status {}", 6).as_str());
+        handle_err(0.0);
+        let mut status: GLint = 0;
+        gl::GetShaderiv(shader, gl::COMPILE_STATUS, (&mut status) as *mut _);
+
+        if status == (gl::FALSE as GLint) {
+            let mut max_length: GLint = 0;
+            let mut msg_length: GLsizei = 0;
+            gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, (&mut max_length) as *mut _);
+
+            let mut data: Vec<u8> = vec![0; max_length as usize];
+            gl::GetShaderInfoLog(
+                shader,
+                max_length as GLsizei,
+                (&mut msg_length) as *mut _,
+                data.as_mut_ptr() as *mut _,
+            );
+
+            let data = String::from_utf8_lossy(&data);
+
+            //print shader compilation problem
+            let string = format!("Failed to compile shader {}: {}", shader, data);
+            let filtered_string = string.replace('\0', "");
+
+            rlog::log(Level::Error, filtered_string.as_str());
+        }
+        handle_err(1.0);
+    }
 }
 
 
@@ -220,31 +257,41 @@ impl  Core  {
 
     fn new(game_path: PathBuf) -> Result<Core, ()>{
 
+        if !rlog::init() {
+            return Err(());
+        }
+
+        rlog::log(Level::Info, "Starting init...");
         //initialize the hardware backends
         if !libretro::set_pixel_format(libretro::PixelFormat::Xrgb8888) {
-            log::warn!("Can't set pixel format");
+            //log::warn!("Can't set pixel format");
+            rlog::log(Level::Error, "Can't set pixel format");
             return Err(());
         }
 
         //todo! make ContextType dynamic so we can run with gles as well
         if !libretro::hw_context::init() {
-            log::warn!("Failed to init hardware context");
+            //log::warn!("Failed to init hardware context");
+            rlog::log(Level::Error, "Failed to init hardware context");
             return Err(());
         }
 
         if !libretro::register_frame_time_callback(50) {
-            log::warn!("Failed to init delta frame counter");
+            //log::warn!("Failed to init delta frame counter");
+            rlog::log(Level::Error, "Failed to init delta frame counter");
             return Err(());
         }
 
         let async_audio_enabled = if !libretro::async_audio_context::register_async_audio_callback() {
-            log::warn!("Failed to init async audio, falling back to synchronous");
+            //log::warn!("Failed to init async audio, falling back to synchronous");
+            rlog::log(Level::Warn, "Failed to init async audio, falling back to synchronous");
             false
         } else {true};
 
         if !libretro::retro_filesystem_context::register_vfs_interface(3) {
-           log::warn!("Failed to init filesystem");
-           return Err(());
+          //log::warn!("Failed to init filesystem");
+          rlog::log(Level::Error, "Failed to init filesystem");
+          return Err(());
         }
 
         let sys_dir = get_system_directory();
@@ -285,6 +332,7 @@ impl  Core  {
         //let get_current_framebuffer: fn() -> usize = libretro::hw_context::get_current_framebuffer;
         //let get_proc_address: fn(&str) -> *const c_void = libretro::hw_context::get_proc_address;
 
+        rlog::log(Level::Info, "Init finished...");
 
         Ok(Core {
 
@@ -351,6 +399,8 @@ impl  Core  {
 
     pub fn make_dirty_shaders(&mut self) {
 
+        rlog::log(Level::Info, "Making shaders...");
+
         let mut vert_shader = 0;
         let mut frag_shader = 0;
         unsafe{
@@ -369,6 +419,9 @@ impl  Core  {
     
             gl::CompileShader(vert_shader);
             gl::CompileShader(frag_shader);
+
+            check_shader_compile_status(vert_shader);
+            check_shader_compile_status(frag_shader);
     
             program_id = gl::CreateProgram();
             gl::AttachShader(program_id, vert_shader);
@@ -398,6 +451,9 @@ impl  Core  {
         self.vert_shader = vert_shader;
         self.program_id = program_id;
         self.frag_shader = frag_shader;
+
+
+        rlog::log(Level::Info, "Shaders finished...");
 
 
     }
@@ -439,9 +495,10 @@ impl  libretro::Context  for Core  {
 
     fn render_frame(&mut self) {
 
+        while handle_err(2.0) {}
 
 
-        handle_err();
+        handle_err(2.1);
 
 
         if !self.has_set_res {
@@ -478,9 +535,13 @@ impl  libretro::Context  for Core  {
 
 
         //let fbo = libretro::hw_context::get_current_framebuffer() as GLuint;
-        self.bind_libretro_framebuffer();
+        self.bind_libretro_framebuffer(); //problem here 1280 in mobile
+
+
+
+
         unsafe {
-            handle_err();
+            handle_err(3.0);
             // gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, fbo);
             // //gl::Viewport(0, 0, w as GLsizei, h as GLsizei);
             // gl::Viewport(0, 0, WIDTH as GLsizei, HEIGHT as GLsizei);
@@ -527,6 +588,7 @@ impl  libretro::Context  for Core  {
             //open
             gl::Disable(gl::SCISSOR_TEST);
             gl::BindVertexArray(self.vao);
+            handle_err(3.1);
 
             //run
             gl::ClearColor(0.5,
@@ -536,7 +598,9 @@ impl  libretro::Context  for Core  {
                 // to the mask bit in fill_rect. No$
                 // seems to say that it's set to 0.
                 0.);
+            handle_err(3.2);
             gl::Clear(gl::COLOR_BUFFER_BIT);
+            handle_err(3.21);
             gl::UseProgram(self.program_id);
 
             let vertices: [f32; 9] = [
@@ -545,13 +609,18 @@ impl  libretro::Context  for Core  {
                  0.0,  0.5, 0.0 //center
             ];
             gl::BufferData(gl::ARRAY_BUFFER, (vertices.len() * std::mem::size_of::<GLfloat>()) as GLsizeiptr, vertices.as_ptr() as *const _, gl::STATIC_DRAW);
+            handle_err(3.22);
             gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 3 * std::mem::size_of::<GLfloat>() as GLsizei, std::ptr::null());
-            gl::DrawArrays(gl::TRIANGLES, 0, 3);
+            handle_err(3.23);
 
+            gl::DrawArrays(gl::TRIANGLES, 0, 3);
+            handle_err(3.3);
 
             //close
             gl::Disable(gl::BLEND);
+            handle_err(4.0);
             gl::BlendColor(0., 0., 0., 1.0);
+            handle_err(4.1);
             // gl::BlendEquationSeparate(gl::FUNC_ADD, gl::FUNC_ADD);
             // gl::BlendFuncSeparate(gl::ONE,
             //                       gl::ZERO,
@@ -560,13 +629,18 @@ impl  libretro::Context  for Core  {
             // gl::ActiveTexture(gl::TEXTURE0);
             // gl::BindTexture(gl::TEXTURE_2D, 0);
 
+
+            //this has a problem
             gl::BindVertexArray(0);
+            handle_err(4.11);
             gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
             gl::LineWidth(1.);
-            handle_err();
+            handle_err(4.2);
 
 
         }
+
+        rlog::log(Level::Info, "Finished... frame");
 
 
         gl_frame_done(WIDTH, HEIGHT)

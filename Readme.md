@@ -6,7 +6,7 @@ This repo is a "fork" of the [d-rs engine](https://github.com/doukutsu-rs/doukut
 
 ### Feature Checklist
 - [x] Screen drawing (openGL)
-- [ ] Screen drawing (openGLES)
+- [X] Screen drawing (openGLES)
 - [ ] Screen drawing (software?)
 - [x] Screen rescaling *(see core display settings)*
 - [x] Game timing
@@ -14,13 +14,31 @@ This repo is a "fork" of the [d-rs engine](https://github.com/doukutsu-rs/doukut
 - [ ] V-Sync support
 - [x] Core restarting
 - [x] Input (Keyboard)
-- [ ] Input (Gamepad) *(partially working)* 
+- [ ] Input (Gamepad) *(partially working, currently disabled because it conflicts with keyboard input)* 
 - [x] Core display settings (aspect ratio, scale, etc.)
 - [x] Filesystem
 - [ ] Platforms
   - [x] Windows
-  - [ ] Linux
+  - [X] Linux
   - [ ] Mac OS
   - [ ] Android
   - [ ] iOS
+
+
+### Personal notes
+<details>
+	<summary>Notes</summary>
+	To compile retroarch to use openglES, use:</br>
+	<code>./configure --disable-videocore --disable-opengl1 --enable-opengles --enable-opengles3 --enable-opengles3_1</code></br>
+   then</br>
+	<code>make</code>
+</details>
+
+
+
+
+
+
+
+
 

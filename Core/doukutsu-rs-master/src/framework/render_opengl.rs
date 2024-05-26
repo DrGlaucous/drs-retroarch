@@ -558,10 +558,15 @@ impl RenderShader {
     unsafe fn bind_attrib_pointer(&self, gl: &Gl, vbo: GLuint) -> GameResult {
         handle_err(gl, 0);
         gl.gl.UseProgram(self.program_id);
+        handle_err(gl, 0);
         gl.gl.BindBuffer(gl::ARRAY_BUFFER, vbo);
+        handle_err(gl, 0);
         gl.gl.EnableVertexAttribArray(self.position);
+        handle_err(gl, 0);
         gl.gl.EnableVertexAttribArray(self.uv);
+        handle_err(gl, 0);
         gl.gl.EnableVertexAttribArray(self.color);
+        handle_err(gl, 0);
 
         gl.gl.VertexAttribPointer(
             self.position,
@@ -571,7 +576,7 @@ impl RenderShader {
             mem::size_of::<VertexData>() as _,
             field_offset::<VertexData, _, _>(|v| &v.position) as _,
         );
-
+        handle_err(gl, 0);
         gl.gl.VertexAttribPointer(
             self.uv,
             2,
@@ -580,7 +585,7 @@ impl RenderShader {
             mem::size_of::<VertexData>() as _,
             field_offset::<VertexData, _, _>(|v| &v.uv) as _,
         );
-
+        handle_err(gl, 0);
         gl.gl.VertexAttribPointer(
             self.color,
             4,

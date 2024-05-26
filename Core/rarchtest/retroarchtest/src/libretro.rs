@@ -470,7 +470,7 @@ pub mod hw_context {
 
     //default values for the STATIC_HW_CONTEXT
     static mut STATIC_HW_CONTEXT: RenderCallback = RenderCallback {
-        context_type: ContextType::OpenGlCore, //OpenGlCore,
+        context_type: ContextType::OpenGlEs2, //OpenGlCore,
         context_reset: reset,
         // Filled by frontend
         get_current_framebuffer: dummy_get_current_framebuffer,
@@ -483,7 +483,7 @@ pub mod hw_context {
         version_minor: 1,
         cache_context: false,
         context_destroy: context_destroy,
-        debug_context: false,
+        debug_context: true,
     };
 
     pub fn init() -> bool {

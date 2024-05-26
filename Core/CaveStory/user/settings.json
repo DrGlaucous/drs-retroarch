@@ -14,7 +14,9 @@
   "timing_mode": "_50Hz",
   "pause_on_focus_loss": true,
   "organya_interpolation": "Linear",
-  "player1_controller_type": "Keyboard",
+  "player1_controller_type": {
+    "Gamepad": 0
+  },
   "player2_controller_type": "Keyboard",
   "player1_key_map": {
     "left": "Left",

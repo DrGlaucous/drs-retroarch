@@ -422,7 +422,7 @@ impl Default for Settings {
             light_cone: true,
             subpixel_coords: true,
             motion_interpolation: true,
-            touch_controls: cfg!(target_os = "android"),
+            touch_controls: cfg!(all(target_os = "android", not(feature = "backend-libretro"))),//(target_os = "android"),
             display_touch_controls: true,
             soundtrack: "Organya".to_string(),
             bgm_volume: 1.0,

@@ -51,7 +51,7 @@ impl Default for MainMenuEntry {
         #[cfg(all(target_os = "android", not(feature = "backend-libretro")))]
         return MainMenuEntry::DisplayTouchControls;
 
-        #[cfg(not(target_os = "android"))]
+        #[cfg(any(not(target_os = "android"), feature = "backend-libretro"))]
         return MainMenuEntry::SelectedPlayer;
     }
 }

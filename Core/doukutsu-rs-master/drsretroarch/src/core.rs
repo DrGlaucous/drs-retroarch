@@ -32,7 +32,9 @@ use crate::libretro::{self,
     send_audio_samples,
     set_geometry,
     JoyPadButton,
-    Key
+    Key,
+    log as rlog,
+    log::Level,
 };
 
 /// Static system information sent to the frontend on request
@@ -169,8 +171,17 @@ impl<'a>  Core<'a>  {
     fn new(target: PathBuf) -> Result<Core<'a>, ()>{
 
         //initialize the hardware backends
+
+        //needed before d-rs logging is started
+        if !rlog::init() {
+            return Err(());
+        }
+
+        rlog::log(Level::Debug, "Initializing Core.");
+
         if !libretro::set_pixel_format(libretro::PixelFormat::Xrgb8888) {
-            log::warn!("Can't set pixel format");
+            //log::warn!("Can't set pixel format");
+            rlog::log(Level::Error, "Can't set pixel format");
             return Err(());
         }
 
@@ -179,7 +190,9 @@ impl<'a>  Core<'a>  {
         if !libretro::hw_context::init(ContextType::OpenGlCore, 3, 0) {
             render_mode = RenderMode::OpenGlES;
             if !libretro::hw_context::init(ContextType::OpenGlEs2, 2, 1) {
-                log::warn!("Failed to init hardware context");
+                //log::warn!("Failed to init hardware context");
+                rlog::log(Level::Error, "Failed to init hardware context");
+
                 //todo: full software rendering support, but for now, error out.
                 return Err(());
             }
@@ -188,17 +201,22 @@ impl<'a>  Core<'a>  {
 
         //the value of 50 here is arbitrary (in micros). Bigger numbers mean the mainloop will be called less often.
         if !libretro::register_frame_time_callback(50) {
-            log::warn!("Failed to init delta frame counter");
+            //log::warn!("Failed to init delta frame counter");
+            rlog::log(Level::Error, "Failed to init delta frame counter");
             return Err(());
         }
 
         let async_audio_enabled = if !libretro::async_audio_context::register_async_audio_callback() {
-            log::warn!("Failed to init async audio, falling back to synchronous?"); //todo: implement synchronous audio
+            //todo: implement synchronous audio
+            
+            //log::warn!("Failed to init async audio, falling back to synchronous");
+            rlog::log(Level::Warn, "Failed to init async audio, falling back to synchronous");
             false
         } else {true};
 
         let rumble_enabled = if !libretro::joypad_rumble_context::register_rumble_callback() {
-            log::warn!("Failed to init rumble interface, controllers will not have feedback");
+            //log::warn!("Failed to init filesystem");
+            rlog::log(Level::Error, "Failed to init filesystem");
             false
         } else {true};
 
@@ -225,7 +243,9 @@ impl<'a>  Core<'a>  {
 
         //set path for the game saves. If we can, start by putting the saves in the global retroarch directory. If not, put it in the portable directory
         let user_dir = if let Some(dir) = get_save_directory() {dir} else {
-            log::warn!("Failed to get save directory. Using portable directory.");
+            //log::warn!("Failed to get save directory. Using portable directory.");
+            rlog::log(Level::Warn, "Failed to get save directory. Using portable directory.");
+            
             let mut usr_target = resource_dir.clone();//.pop().push("user");
             let _ = usr_target.pop();
 
@@ -275,6 +295,7 @@ impl<'a>  Core<'a>  {
         let initial_width = initial_height * ratio.0 / ratio.1;
 
 
+        rlog::log(Level::Debug, "Core initialized.");
 
         Ok(Core {
             backend,
@@ -387,8 +408,8 @@ impl<'a>  libretro::Context  for Core<'a>  {
     fn render_frame(&mut self) {
 
 
-        //self.poll_keys();
-        self.poll_gamepad(); //todo: enable this (currently having controller mapping problems where it conflicts with the keyboard)
+        self.poll_keys();
+        //self.poll_gamepad(); //todo: enable this (currently having controller mapping problems where it conflicts with the keyboard)
 
 
         self.event_loop.update(self.state_ref, self.game.as_mut().get_mut(), &mut self.context, self.delta_time as u64);
