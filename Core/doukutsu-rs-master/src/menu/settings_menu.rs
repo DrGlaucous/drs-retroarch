@@ -58,7 +58,7 @@ enum GraphicsMenuEntry {
     ScreenShake,
     MotionInterpolation,
     SubpixelScrolling,
-    OriginalTextures,
+    OriginalTextures, 
     SeasonalTextures,
     Renderer,
     Back,

@@ -67,7 +67,7 @@ pub fn init() {
 }
 
 pub fn init_variables() {
- CoreVariables::register();
+    CoreVariables::register();
 }
 
 //get the current state of the backend's video settings (placeholder for now...)
@@ -408,8 +408,8 @@ impl<'a>  libretro::Context  for Core<'a>  {
     fn render_frame(&mut self) {
 
 
-        self.poll_keys();
-        //self.poll_gamepad(); //todo: enable this (currently having controller mapping problems where it conflicts with the keyboard)
+        //self.poll_keys();
+        self.poll_gamepad(); //todo: enable this (currently having controller mapping problems where it conflicts with the keyboard)
 
 
         self.event_loop.update(self.state_ref, self.game.as_mut().get_mut(), &mut self.context, self.delta_time as u64);

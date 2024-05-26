@@ -273,8 +273,7 @@ impl Game {
 fn get_logs_dir() -> GameResult<PathBuf> {
     let mut logs_dir: PathBuf;
 
-
-    #[cfg(target_os = "android")]
+    #[cfg(all(target_os = "android", not(feature = "backend-libretro")))]
     {
         logs_dir = PathBuf::from(ndk_glue::native_activity().internal_data_path().to_string_lossy().to_string());
     }
@@ -284,7 +283,7 @@ fn get_logs_dir() -> GameResult<PathBuf> {
         logs_dir = PathBuf::from("sdmc:/switch/doukutsu-rs");
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "horizon")))]
+    #[cfg(any(not(any(target_os = "android", target_os = "horizon")), feature = "backend-libretro"))]
     {
         let project_dirs = match directories::ProjectDirs::from("", "", "doukutsu-rs") {
             Some(dirs) => dirs,
