@@ -31,6 +31,7 @@ use crate::libretro::{self,
     key_pressed,
     send_audio_samples,
     set_geometry,
+    InputDevice,
     JoyPadButton,
     Key,
     log as rlog,
@@ -41,7 +42,7 @@ use crate::libretro::{self,
 pub const SYSTEM_INFO: libretro::SystemInfo = libretro::SystemInfo {
     library_name: cstring!("d-rs"),
     library_version: "0.0.1" as *const _ as *const c_char,
-    valid_extensions: cstring!("exe"),//cstring!(".exe"),
+    valid_extensions: cstring!("exe"),
     need_fullpath: true,
     block_extract: false,
 };
@@ -161,6 +162,7 @@ struct Core<'a>  {
     screen_width: u32,
     screen_height: u32,
 
+    rumble_enabled: bool,
     async_audio_enabled: bool, //true if async audio has been enabled
     delta_time: i64, //time since last frame
     audio_runner: Runner, //object that containst the audio context
@@ -278,26 +280,13 @@ impl<'a>  Core<'a>  {
 
         let state_ref = unsafe {&mut *game.state.get()};
 
-
-        //assume gamepads are always connected from retroarch (todo: make this dynamic)
-        for idx in 0..GAMEPAD_COUNT {
-            event_loop.add_gamepad(state_ref, &mut context, idx, 
-            if rumble_enabled {Some(joypad_rumble_context::set_rumble)} else {None}
-            );
-        }
-
-
-
         //set starting resolution:
         let scale_factor = CoreVariables::internal_upscale_factor();
         let ratio = CoreVariables::screen_ratio();
         let initial_height = HEIGHT * scale_factor;
         let initial_width = initial_height * ratio.0 / ratio.1;
 
-
-        rlog::log(Level::Debug, "Core initialized.");
-
-        Ok(Core {
+        let mut core = Core {
             backend,
             event_loop,
             context,
@@ -306,20 +295,31 @@ impl<'a>  Core<'a>  {
             game,
             screen_height: initial_height,
             screen_width: initial_width,
+            rumble_enabled,
             async_audio_enabled,
             delta_time: 0,
             audio_runner: audio_runner.unwrap(),
 
             ////data_path: data.clone().to_path_buf(), 
-        
-        
-        })
+        };
+
+        //assume gamepads are always connected from retroarch (todo: make this dynamic)
+        for idx in 0..GAMEPAD_COUNT {
+            use crate::libretro::Context;
+            core.set_controller_port_device(idx as u32, InputDevice::JoyPad);
+        }
+
+        rlog::log(Level::Debug, "Core initialized.");
+
+        Ok(core)
         
     }
 
+    // mainly for testing, having this active as well as the gamepad results in some conflicts because some buttons are applied 2x
     fn poll_keys(&mut self) {
         
         for (ret_key, drs_key) in KEY_MAP {
+            key_pressed(0, ret_key);
             self.event_loop.update_keys(&mut self.context, drs_key, key_pressed(0, ret_key));
         }
     }
@@ -329,12 +329,13 @@ impl<'a>  Core<'a>  {
         for idx in 0..GAMEPAD_COUNT {
             for (ret_but, drs_but) in BUTTON_MAP {
 
-                //test
-                let bt_state = button_pressed(idx as u8, ret_but);
-                if bt_state {
-                    let mut yyyt = 9;
-                    let mut yydfs = yyyt + 1;
-                }
+                // //test (fast conditional breakpoint)
+                // let bt_state = button_pressed(idx as u8, ret_but);
+                // if bt_state {
+                //     let mut yyyt = 9;
+                //     let mut yydfs = yyyt + 1;
+                //     let mut ttt = yyyt + yydfs;
+                // }
 
                 self.event_loop.update_gamepad(&mut self.context, idx, drs_but, button_pressed(idx as u8, ret_but));
     
@@ -470,15 +471,41 @@ impl<'a>  libretro::Context  for Core<'a>  {
          let _ = self.event_loop.destroy_renderer(&mut self.state_ref, &mut self.context);
     }
 
+    //how long since the last frame was called
     fn elapse_time(&mut self, delta_time: i64) {
-        self.delta_time = delta_time; //in microseconds
+        self.delta_time = delta_time; //in microseconds us
     }
+
     fn async_audio_callback(&mut self) {
         self.run_audio();
     }
     //not really needed at the moment...
     fn async_audio_state(&mut self, _is_enabled: bool) {
         
+    }
+
+    //used to change or set controller mappings
+    fn set_controller_port_device(&mut self, port: u32, controller_type: InputDevice) {
+
+        match controller_type {
+            InputDevice::JoyPad => {
+
+                //assign the joypad to the backend
+                self.event_loop.add_gamepad(self.state_ref, &mut self.context, port, 
+                    if self.rumble_enabled {Some(joypad_rumble_context::set_rumble)} else {None}
+                );
+
+                //set up user-readable joypad mappings (might be optional since these IDs can also be set ingame, making the ones here invalid.)
+
+
+
+            }
+            InputDevice::Keyboard => {
+                //remove gamepad and "add" keyboard (?)
+            }
+            _ => {}
+        }
+
     }
 
 

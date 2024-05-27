@@ -17,7 +17,9 @@
   "player1_controller_type": {
     "Gamepad": 0
   },
-  "player2_controller_type": "Keyboard",
+  "player2_controller_type": {
+    "Gamepad": 1
+  },
   "player1_key_map": {
     "left": "Left",
     "up": "Up",

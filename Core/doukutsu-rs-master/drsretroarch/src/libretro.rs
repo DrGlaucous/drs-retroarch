@@ -52,8 +52,8 @@ pub trait Context {
     fn async_audio_callback(&mut self);
     /// Called when the audio thread is paused or resumed
     fn async_audio_state(&mut self, is_enabled: bool);
-
-
+    /// Called when a controller type is changed
+    fn set_controller_port_device(&mut self, controller_port: u32, controller_type: InputDevice);
 
 }
 
@@ -93,7 +93,7 @@ pub struct SystemInfo {
 
 #[repr(C)]
 pub struct GameGeometry {
-    pub base_width: c_uint,
+    pub base_width: c_uint, //"unsigned" type in c++
     pub base_height: c_uint,
     pub max_width: c_uint,
     pub max_height: c_uint,
@@ -190,6 +190,19 @@ pub enum InputDevice {
     LightGun = 4,
     Analog = 5,
     Pointer = 6,
+}
+impl From<u32> for InputDevice {
+    fn from(id: u32) -> InputDevice {
+        match id {
+            1 => InputDevice::JoyPad,
+            2 => InputDevice::Mouse,
+            3 => InputDevice::Keyboard,
+            4 => InputDevice::LightGun,
+            5 => InputDevice::Analog,
+            6 => InputDevice::Pointer,
+            _ => InputDevice::None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1165,7 +1178,7 @@ pub fn button_pressed(port: u8, b: JoyPadButton) -> bool {
     }
 }
 
-//check if a key is pressed
+//check if a key is pressed (is also needed if keys are bound to the joypad...?)
 pub fn key_pressed(port: u8, k: Key) -> bool {
     unsafe {
         INPUT_STATE(port as c_uint,
@@ -1414,11 +1427,16 @@ pub extern "C" fn retro_get_system_av_info(info: *mut SystemAvInfo) {
     *info = context().get_system_av_info();
 }
 
-//does nothing but print what these are
+//tells the frontend what the controller mappings are
+
+
+//tells the core if a controller has been changed and what type it is
 #[no_mangle]
-pub extern "C" fn retro_set_controller_port_device(_port: c_uint,
-                                                   _device: c_uint) {
-    rlog::info!("port device: {} {}", _port, _device); //debug!
+pub extern "C" fn retro_set_controller_port_device(port: c_uint,
+                                                   device: c_uint) {
+
+    rlog::info!("port device: {} {}", port, device); //debug!
+    context().set_controller_port_device(port, InputDevice::from(device));
 }
 
 //tell backend it needs to reset
@@ -1582,6 +1600,8 @@ pub mod dummy {
 
     use libc::{c_void, c_uint, size_t};
 
+    use super::InputDevice;
+
     pub unsafe extern "C" fn video_refresh(_: *const c_void,
                                        _: c_uint,
                                        _: c_uint,
@@ -1659,6 +1679,10 @@ pub mod dummy {
         fn async_audio_state(&mut self, _: bool) {
             //this is reduced to warn level because the core has been unloaded by the time this is called.
             log::warn!("Called async_audio_state with no context!");
+        }
+
+        fn set_controller_port_device(&mut self, _: u32, _: InputDevice) {
+            panic!("Called set_controller_port_device with no context!");
         }
 
     }

@@ -106,6 +106,8 @@ pub trait BackendGamepad {
     fn set_rumble(&mut self, low_freq: u16, high_freq: u16, duration_ms: u32) -> GameResult;
 
     fn instance_id(&self) -> u32;
+
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 #[allow(unreachable_code)]

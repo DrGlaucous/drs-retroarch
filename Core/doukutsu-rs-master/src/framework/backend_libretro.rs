@@ -150,11 +150,27 @@ impl LibretroEventLoop {
     {
         //let state_ref = unsafe { &mut *game.state.get() };
 
+        //tick the gamepads' rumble timers
+        let gamepad_count = {ctx.gamepad_context.get_gamepads().len()};
+        for gamepad_index in 0..gamepad_count
+        {
+            if let Some(gamepad) = ctx.gamepad_context.get_gamepad_by_index_mut(gamepad_index) {
+                if let Some(libretro_gp_context) = gamepad.controller
+                    .as_any_mut()
+                    .downcast_mut::<LibretroGamepad>() {
+                
+                    libretro_gp_context.tick(micros);
+                }
+            }
+        }
+
+
         game.update(ctx, micros).unwrap();
 
         if state_ref.shutdown {
             log::info!("Shutting down...");
             //TODO: tell core to halt execution
+
             return;
         }
 
@@ -189,14 +205,18 @@ impl LibretroEventLoop {
     pub fn add_gamepad(&mut self,
         state_ref: &mut SharedGameState,
         ctx: &mut Context,
-        id: u16,
+        id: u32,
         rumble_fn: Option<fn (controller_port: u32, effect: u16, strengh: u16) -> bool>,
         ) {
         log::info!("Connected gamepad: {} (ID: {})", "Retropad", id);
 
-        let axis_sensitivity = state_ref.settings.get_gamepad_axis_sensitivity(id as u32);
+        let axis_sensitivity = state_ref.settings.get_gamepad_axis_sensitivity(id);
         ctx.gamepad_context.add_gamepad(LibretroGamepad::new(id, rumble_fn), axis_sensitivity);
-        ctx.gamepad_context.set_gamepad_type(id as u32, GamepadType::Virtual);
+        ctx.gamepad_context.set_gamepad_type(id, GamepadType::Virtual);
+    }
+
+    pub fn remove_gamepad(&mut self, ctx: &mut Context, id: u32) {
+        ctx.gamepad_context.remove_gamepad(id);
     }
 
 
@@ -284,34 +304,62 @@ impl BackendEventLoop for LibretroEventLoop {
 
 
 struct LibretroGamepad {
-    id: u16,
+    id: u32,
     rumble_fn: Option<fn (controller_port: u32, effect: u16, strengh: u16) -> bool>,
+
+    // used to convert duration into on/off commands since that's how retroarch works
+    rumble_on: bool,
+    duration_us: u64,
 }
 
 impl LibretroGamepad {
-    pub fn new(id: u16, rumble_fn: Option<fn (_: u32, _: u16, _: u16) -> bool>) -> Box<dyn BackendGamepad> {
+    pub fn new(id: u32, rumble_fn: Option<fn (_: u32, _: u16, _: u16) -> bool>) -> Box<dyn BackendGamepad> {
         Box::new(LibretroGamepad {
             id,
             rumble_fn,
+            rumble_on: false,
+            duration_us: 0,
         })
     }
+
+    //micros (us)
+    pub fn tick(&mut self, delta_time: u64) {
+
+        // halt rumble once it times out
+        if self.duration_us == 0 {
+            // condition to avoid constant calls to the rumble context (works without this measure, but may slow the game down)
+            if self.rumble_on {
+                self.rumble_on = false;
+                self.set_rumble(0, 0, 0);
+            }
+        } else {
+            self.duration_us = self.duration_us.saturating_sub(delta_time);
+        }
+    }
+
 }
 
 impl BackendGamepad for LibretroGamepad {
 
     fn set_rumble(&mut self, low_freq: u16, high_freq: u16, duration_ms: u32) -> GameResult {
         
-        //todo: MAKE IT STOP!!!!!
+        //todo: IT WON'T STOP!!!!! - Kazuma
         if let Some(rumble_fn) = self.rumble_fn{
-            let _ = rumble_fn(self.id as u32, 0, low_freq);
-            let _ = rumble_fn(self.id as u32, 1, high_freq);
+            let _ = rumble_fn(self.id as u32, 0, low_freq); // set low freq. rumble speed
+            let _ = rumble_fn(self.id as u32, 1, high_freq); // set high freq. rumble speed
         }
+        self.duration_us = duration_ms as u64 * 1000; // change units
+        self.rumble_on = (low_freq > 0 || high_freq > 0);
 
         Ok(())
     }
 
     fn instance_id(&self) -> u32 {
-        self.id as u32
+        self.id
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 
 }

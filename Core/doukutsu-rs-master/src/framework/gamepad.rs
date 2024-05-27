@@ -158,7 +158,7 @@ impl PlayerControllerInputType {
 }
 
 pub struct GamepadData {
-    controller: Box<dyn BackendGamepad>,
+    pub controller: Box<dyn BackendGamepad>,
     controller_type: GamepadType,
 
     left_x: f64,
@@ -241,7 +241,7 @@ impl GamepadContext {
         self.gamepads.iter_mut().find(|gamepad| gamepad.controller.instance_id() == gamepad_id)
     }
 
-    fn get_gamepad_by_index_mut(&mut self, gamepad_index: usize) -> Option<&mut GamepadData> {
+    pub fn get_gamepad_by_index_mut(&mut self, gamepad_index: usize) -> Option<&mut GamepadData> {
         self.gamepads.get_mut(gamepad_index)
     }
 
