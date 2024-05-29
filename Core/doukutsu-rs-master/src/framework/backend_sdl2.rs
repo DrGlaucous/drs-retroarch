@@ -544,6 +544,10 @@ impl BackendGamepad for SDL2Gamepad {
     fn instance_id(&self) -> u32 {
         self.inner.instance_id()
     }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 struct SDL2Renderer {
