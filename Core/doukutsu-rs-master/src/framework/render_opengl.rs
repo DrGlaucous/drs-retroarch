@@ -38,7 +38,7 @@ pub fn handle_err(gl: &Gl, extra_info: u32) {
         //gl::INVALID_ENUM
         if err != 0 && extra_info != 1 {
         //if err != 0 {
-            log::error!("OpenGL error: {}", err);
+            //log::error!("OpenGL error: {}", err);
         }
     }
 

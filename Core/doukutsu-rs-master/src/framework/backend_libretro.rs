@@ -197,9 +197,16 @@ impl LibretroEventLoop {
     {
         ctx.keyboard_context.set_key(key_id, key_state);
     } 
-    pub fn update_gamepad(&mut self, ctx: &mut Context, id: u16, button_id: Button, button_state: bool)
+    pub fn update_gamepad(&mut self, ctx: &mut Context, id: u16, button_id: Button, button_state: bool, log_fn: fn(msg: String),)
     {
         ctx.gamepad_context.set_button(id as u32, button_id, button_state);
+
+        let buttons = ctx.gamepad_context.pressed_buttons(id as u32);
+        for button in buttons {
+            //log_fn(format!("Set button: {}|{}", "Retropad", button_id as u32, button_state));
+
+            log_fn(format!("Controller {} Button: {} is Pressed!", id, button as u32));
+        }
     }
 
     pub fn add_gamepad(&mut self,
@@ -207,8 +214,10 @@ impl LibretroEventLoop {
         ctx: &mut Context,
         id: u32,
         rumble_fn: Option<fn (controller_port: u32, effect: u16, strengh: u16) -> bool>,
+        log_fn: fn(msg: String),
         ) {
-        log::info!("Connected gamepad: {} (ID: {})", "Retropad", id);
+        //log::info!("Connected gamepad: {} (ID: {})", "Retropad", id);
+        log_fn(format!("Connected gamepad: {} (ID: {})", "Retropad", id));
 
         let axis_sensitivity = state_ref.settings.get_gamepad_axis_sensitivity(id);
         ctx.gamepad_context.add_gamepad(LibretroGamepad::new(id, rumble_fn), axis_sensitivity);

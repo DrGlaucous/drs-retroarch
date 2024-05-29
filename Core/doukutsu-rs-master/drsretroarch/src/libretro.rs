@@ -348,6 +348,7 @@ pub enum Key {
 
 /// RETRO_DEVICE_ID_JOYPAD_* constants
 #[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
 pub enum JoyPadButton {
     B = 0,
     Y = 1,
@@ -632,6 +633,14 @@ pub mod log {
             STATIC_LOG(lvl, format.as_ptr() as *const _, cstr);
         }
     }
+
+
+    //simple-as function for getting *something* into the terminal
+    pub fn dirty_log(msg: String) {
+        log(Level::Info, msg.as_str());
+    }
+
+
 }
 
 //interface for controlling the rumble of the joypad

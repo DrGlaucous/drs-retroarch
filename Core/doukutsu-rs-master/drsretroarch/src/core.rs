@@ -326,20 +326,17 @@ impl<'a>  Core<'a>  {
 
     fn poll_gamepad(&mut self) {
     
-        for idx in 0..16 {
-            for (ret_but, _) in BUTTON_MAP {
+        // for idx in 0..16 {
+        //     for (ret_but, _) in BUTTON_MAP {
+        //         // //test (fast conditional breakpoint)
+        //         let bt_state = button_pressed(idx as u8, ret_but);
+        //         if bt_state {
+        //             rlog::log(Level::Info, format!("Button pressed: {}:{}", idx, ret_but.as_int()).as_str());
+        //         }
+        //     }
+        // }
 
-                // //test (fast conditional breakpoint)
-                let bt_state = button_pressed(idx as u8, ret_but);
-                if bt_state {
-                    
-                    rlog::log(Level::Info, format!("Button pressed: {}:{}", idx, ret_but.as_int()).as_str());
-                }
     
-            }
-        }
-    
-
         for idx in 0..GAMEPAD_COUNT {
             for (ret_but, drs_but) in BUTTON_MAP {
 
@@ -350,8 +347,13 @@ impl<'a>  Core<'a>  {
                 //     let mut yydfs = yyyt + 1;
                 //     let mut ttt = yyyt + yydfs;
                 // }
+                let bt_state = button_pressed(idx as u8, ret_but);
+                if bt_state {
+                    
+                    rlog::log(Level::Info, format!("Button pressed: {}:{}", idx, ret_but as u32).as_str());
+                }
 
-                self.event_loop.update_gamepad(&mut self.context, idx, drs_but, button_pressed(idx as u8, ret_but));
+                self.event_loop.update_gamepad(&mut self.context, idx, drs_but, button_pressed(idx as u8, ret_but), rlog::dirty_log);
     
             }
         }
@@ -506,7 +508,7 @@ impl<'a>  libretro::Context  for Core<'a>  {
 
                 //assign the joypad to the backend
                 self.event_loop.add_gamepad(self.state_ref, &mut self.context, port, 
-                    if self.rumble_enabled {Some(joypad_rumble_context::set_rumble)} else {None}
+                    if self.rumble_enabled {Some(joypad_rumble_context::set_rumble)} else {None}, rlog::dirty_log
                 );
 
                 //set up user-readable joypad mappings (might be optional since these IDs can also be set ingame, making the ones here invalid.)
