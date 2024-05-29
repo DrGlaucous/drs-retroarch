@@ -174,7 +174,7 @@ impl<'a>  Core<'a>  {
 
         //initialize the hardware backends
 
-        //needed before d-rs logging is started
+        //needed before d-rs logging is started (not sure why this is the only function where this doesn't work...)
         if !rlog::init() {
             return Err(());
         }
@@ -326,6 +326,20 @@ impl<'a>  Core<'a>  {
 
     fn poll_gamepad(&mut self) {
     
+        for idx in 0..16 {
+            for (ret_but, _) in BUTTON_MAP {
+
+                // //test (fast conditional breakpoint)
+                let bt_state = button_pressed(idx as u8, ret_but);
+                if bt_state {
+                    
+                    rlog::log(Level::Info, format!("Button pressed: {}:{}", idx, ret_but.as_int()).as_str());
+                }
+    
+            }
+        }
+    
+
         for idx in 0..GAMEPAD_COUNT {
             for (ret_but, drs_but) in BUTTON_MAP {
 
