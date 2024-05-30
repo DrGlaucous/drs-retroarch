@@ -164,6 +164,7 @@ pub struct Message {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Environment {
     SetMessage = 6,
+    EnvironmentShutdown = 7,
     GetSystemDirectory = 9,
     SetPixelFormat = 10,
     SetHwRender = 14,
@@ -366,28 +367,6 @@ pub enum JoyPadButton {
     R2 = 13,
     L3 = 14,
     R3 = 15,
-}
-impl JoyPadButton {
-    pub fn as_int(self) -> u32 {
-        match self {
-            JoyPadButton::B => 0,
-            JoyPadButton::Y => 1,
-            JoyPadButton::Select => 2,
-            JoyPadButton::Start => 3,
-            JoyPadButton::Up => 4,
-            JoyPadButton::Down => 5,
-            JoyPadButton::Left => 6,
-            JoyPadButton::Right => 7,
-            JoyPadButton::A => 8,
-            JoyPadButton::X => 9,
-            JoyPadButton::L => 10,
-            JoyPadButton::R => 11,
-            JoyPadButton::L2 => 12,
-            JoyPadButton::R2 => 13,
-            JoyPadButton::L3 => 14,
-            JoyPadButton::R3 => 15,
-        }
-    }
 }
 
 
@@ -1258,7 +1237,12 @@ pub fn get_save_directory() -> Option<PathBuf> {
     }
 }
 
-
+//request that the frontend close the content
+pub fn request_shutdown() -> bool {
+    unsafe {
+        call_environment(Environment::EnvironmentShutdown, &ptr::null::<c_void>())
+    }
+}
 
 //set pixel mix type
 pub fn set_pixel_format(format: PixelFormat) -> bool {

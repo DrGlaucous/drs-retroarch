@@ -140,7 +140,7 @@ fn default_screen_shake_intensity() -> ScreenShakeIntensity {
 
 #[inline(always)]
 fn default_p1_controller_type() -> ControllerType {
-    if cfg!(any(target_os = "horizon")) {
+    if cfg!(any(target_os = "horizon", feature = "backend-libretro")) {
         ControllerType::Gamepad(0)
     } else {
         ControllerType::Keyboard
@@ -149,7 +149,7 @@ fn default_p1_controller_type() -> ControllerType {
 
 #[inline(always)]
 fn default_p2_controller_type() -> ControllerType {
-    if cfg!(any(target_os = "horizon")) {
+    if cfg!(any(target_os = "horizon", feature = "backend-libretro")) {
         ControllerType::Gamepad(1)
     } else {
         ControllerType::Keyboard
@@ -345,6 +345,18 @@ impl Settings {
         if self.version == 23 {
             self.version = 24;
             self.allow_strafe = true;
+        }
+
+        // Force keyboardless implementations to use controllers regardless of what the settings were initially (in case a portable version was imported)
+        #[cfg(any(target_os = "horizon", feature = "backend-libretro"))]
+        {
+            // Don't touch pad assignments if they're already not a keyboard
+            if self.player1_controller_type == ControllerType::Keyboard {
+                self.player1_controller_type = default_p1_controller_type();
+            }
+            if self.player2_controller_type == ControllerType::Keyboard {
+                self.player2_controller_type = default_p2_controller_type();
+            }
         }
 
         if self.version != initial_version {

@@ -200,7 +200,7 @@ impl ControlsMenu {
     }
 
     pub fn init(&mut self, state: &mut SharedGameState, ctx: &mut Context) -> GameResult {
-        #[cfg(not(target_os = "android"))]
+        #[cfg(any(not(target_os = "android"), feature = "backend-libretro"))]
         {
             self.main.push_entry(
                 MainMenuEntry::SelectedPlayer,

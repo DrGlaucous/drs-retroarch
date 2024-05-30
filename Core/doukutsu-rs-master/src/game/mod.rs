@@ -270,32 +270,36 @@ impl Game {
 // some messages during init, but the default logger cannot be replaced with another
 // one or deinited(so we can't create the console-only logger and replace it by the
 // console&file logger after FilesystemContainer has been initialized)
-fn get_logs_dir() -> GameResult<PathBuf> {
+fn get_logs_dir(provided_dir: Option<PathBuf>) -> GameResult<PathBuf> {
     let mut logs_dir: PathBuf;
 
-    #[cfg(all(target_os = "android", not(feature = "backend-libretro")))]
-    {
-        logs_dir = PathBuf::from(ndk_glue::native_activity().internal_data_path().to_string_lossy().to_string());
-    }
-
-    #[cfg(target_os = "horizon")]
-    {
-        logs_dir = PathBuf::from("sdmc:/switch/doukutsu-rs");
-    }
-
-    #[cfg(any(not(any(target_os = "android", target_os = "horizon")), feature = "backend-libretro"))]
-    {
-        let project_dirs = match directories::ProjectDirs::from("", "", "doukutsu-rs") {
-            Some(dirs) => dirs,
-            None => {
-                use crate::framework::error::GameError;
-                return Err(GameError::FilesystemError(String::from(
-                    "No valid home directory path could be retrieved.",
-                )));
-            }
-        };
-
-        logs_dir = project_dirs.data_local_dir().to_path_buf();
+    //check first to see if we have a pre-provided directory
+    if let Some(log_dir) = provided_dir {
+        logs_dir = log_dir;
+    } else {
+        // use the traditional method(s) if not
+        #[cfg(target_os = "android")]
+        {
+            logs_dir = PathBuf::from(ndk_glue::native_activity().internal_data_path().to_string_lossy().to_string());
+        }
+        #[cfg(target_os = "horizon")]
+        {
+            logs_dir = PathBuf::from("sdmc:/switch/doukutsu-rs");
+        } 
+        #[cfg(not(any(target_os = "android", target_os = "horizon")))]
+        {
+            let project_dirs = match directories::ProjectDirs::from("", "", "doukutsu-rs") {
+                Some(dirs) => dirs,
+                None => {
+                    use crate::framework::error::GameError;
+                    return Err(GameError::FilesystemError(String::from(
+                        "No valid home directory path could be retrieved.",
+                    )));
+                }
+            };
+    
+            logs_dir = project_dirs.data_local_dir().to_path_buf();
+        }
     }
 
     logs_dir.push("logs");
@@ -304,8 +308,8 @@ fn get_logs_dir() -> GameResult<PathBuf> {
     Ok(logs_dir)
 }
 
-fn init_logger() -> GameResult {
-    let logs_dir = get_logs_dir()?;
+fn init_logger(provided_dir: Option<PathBuf>) -> GameResult {
+    let logs_dir = get_logs_dir(provided_dir)?;
     let _ = std::fs::create_dir_all(&logs_dir);
     
     
@@ -345,7 +349,7 @@ fn init_logger() -> GameResult {
 pub fn init(options: LaunchOptions) -> GameResult<(Option<Pin<Box<Game>>>, Option<Pin<Box<Context>>>)> {
     let mut options = options;
 
-    let _ = init_logger();
+    let _ = init_logger(options.usr_dir.clone());
     
     let mut context = Box::pin(Context::new());
 

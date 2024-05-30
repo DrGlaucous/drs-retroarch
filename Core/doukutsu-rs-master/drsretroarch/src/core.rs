@@ -31,6 +31,7 @@ use crate::libretro::{self,
     key_pressed,
     send_audio_samples,
     set_geometry,
+    request_shutdown,
     InputDevice,
     JoyPadButton,
     Key,
@@ -133,8 +134,6 @@ libretro_variables!(
         screen_ratio: (u32, u32), parse_ratio
             => "Screen Ratio; \
                 4:3 (original)|16:9|21:9",
-        display_internal_fps: bool, parse_bool
-            => "Display internal FPS; disabled|enabled",
         god_mode: bool, parse_bool
             => "GOD Mode (Invincibility); disabled|enabled",
         infinite_booster: bool, parse_bool
@@ -309,6 +308,13 @@ impl<'a>  Core<'a>  {
             core.set_controller_port_device(idx as u32, InputDevice::JoyPad);
         }
 
+        //refresh config info
+        {
+            use crate::libretro::Context;
+            core.refresh_variables();
+        }
+
+
         rlog::log(Level::Debug, "Core initialized.");
 
         Ok(core)
@@ -343,17 +349,11 @@ impl<'a>  Core<'a>  {
                 // //test (fast conditional breakpoint)
                 // let bt_state = button_pressed(idx as u8, ret_but);
                 // if bt_state {
-                //     let mut yyyt = 9;
-                //     let mut yydfs = yyyt + 1;
-                //     let mut ttt = yyyt + yydfs;
-                // }
-                let bt_state = button_pressed(idx as u8, ret_but);
-                if bt_state {
                     
-                    rlog::log(Level::Info, format!("Button pressed: {}:{}", idx, ret_but as u32).as_str());
-                }
+                //     rlog::log(Level::Info, format!("Button pressed: {}:{}", idx, ret_but as u32).as_str());
+                // }
 
-                self.event_loop.update_gamepad(&mut self.context, idx, drs_but, button_pressed(idx as u8, ret_but), rlog::dirty_log);
+                self.event_loop.update_gamepad(&mut self.context, idx, drs_but, button_pressed(idx as u8, ret_but));
     
             }
         }
@@ -432,12 +432,15 @@ impl<'a>  libretro::Context  for Core<'a>  {
         self.event_loop.update(self.state_ref, self.game.as_mut().get_mut(), &mut self.context, self.delta_time as u64);
         gl_frame_done(self.screen_width, self.screen_height);
 
+        //terminate with the ingame menu
+        if self.state_ref.shutdown {
+            request_shutdown();
+        }
 
-        //run audio synchronously
+        //run audio synchronously?
         if !self.async_audio_enabled {
             self.run_audio();
         }
-
 
 
     }
@@ -455,15 +458,12 @@ impl<'a>  libretro::Context  for Core<'a>  {
         //let screen_ratio = CoreVariables::screen_ratio();
         self.set_resolution();
 
+        self.state_ref.settings.god_mode = CoreVariables::god_mode();
+        self.state_ref.settings.fps_counter = CoreVariables::show_fps();
+        self.state_ref.settings.infinite_booster = CoreVariables::infinite_booster();
+        self.state_ref.settings.debug_outlines = CoreVariables::draw_debug_outlines();
+        self.state_ref.debugger = CoreVariables::show_debug_window();
 
-        let display_internal_fps = CoreVariables::display_internal_fps();
-        let god_mode = CoreVariables::god_mode();
-        let infinite_booster = CoreVariables::infinite_booster();
-        let draw_debug_outlines = CoreVariables::draw_debug_outlines();
-        let show_fps = CoreVariables::show_fps();
-        let show_debug_window = CoreVariables::show_debug_window();
-
-        let mut stopper = show_fps && show_debug_window;
 
 
 
@@ -508,7 +508,7 @@ impl<'a>  libretro::Context  for Core<'a>  {
 
                 //assign the joypad to the backend
                 self.event_loop.add_gamepad(self.state_ref, &mut self.context, port, 
-                    if self.rumble_enabled {Some(joypad_rumble_context::set_rumble)} else {None}, rlog::dirty_log
+                    if self.rumble_enabled {Some(joypad_rumble_context::set_rumble)} else {None}
                 );
 
                 //set up user-readable joypad mappings (might be optional since these IDs can also be set ingame, making the ones here invalid.)
