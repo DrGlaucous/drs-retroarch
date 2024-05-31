@@ -369,6 +369,21 @@ pub enum JoyPadButton {
     R3 = 15,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum JoypadAnalog {
+    AnalogLeft = 0,
+    AnalogRight = 1,
+    AnalogButton = 2,
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum JoypadAnalogAxis {
+    AnalogX = 0,
+    AnalogY = 1,
+    L2 = 12,
+    R2 = 13,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PixelFormat {
@@ -1185,6 +1200,16 @@ pub fn button_pressed(port: u8, b: JoyPadButton) -> bool {
                     InputDevice::JoyPad as c_uint,
                     0,
                     b as c_uint) != 0
+    }
+}
+
+//get analog state of joysticks
+pub fn joystick_analog_state(port: u8, bttn: JoypadAnalog, axis: JoypadAnalogAxis) -> i16 {
+    unsafe {
+        INPUT_STATE(port as c_uint,
+                    InputDevice::Analog as c_uint,
+                    bttn as c_uint,
+                    axis as c_uint)
     }
 }
 

@@ -350,7 +350,7 @@ impl Settings {
         // Force keyboardless implementations to use controllers regardless of what the settings were initially (in case a portable version was imported)
         #[cfg(any(target_os = "horizon", feature = "backend-libretro"))]
         {
-            // Don't touch pad assignments if they're already not a keyboard
+            // Don't touch pad assignments if they're already a controller
             if self.player1_controller_type == ControllerType::Keyboard {
                 self.player1_controller_type = default_p1_controller_type();
             }

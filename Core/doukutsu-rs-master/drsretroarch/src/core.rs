@@ -14,7 +14,7 @@ use std::ffi::c_void;
 use doukutsu_rs::framework::backend_libretro::{LibretroEventLoop, LibretroBackend, RenderMode};
 use doukutsu_rs::framework::backend::{BackendEventLoop, Backend};
 use doukutsu_rs::framework::keyboard::ScanCode;
-use doukutsu_rs::framework::gamepad::Button;
+use doukutsu_rs::framework::gamepad::{Button, Axis};
 use doukutsu_rs::framework::context::{self, Context};
 use doukutsu_rs::game::Game;
 use doukutsu_rs::scene::title_scene;
@@ -29,11 +29,14 @@ use crate::libretro::{self,
     gl_frame_done,
     joypad_rumble_context,
     key_pressed,
+    joystick_analog_state,
     send_audio_samples,
     set_geometry,
     request_shutdown,
     InputDevice,
     JoyPadButton,
+    JoypadAnalog,
+    JoypadAnalogAxis,
     Key,
     log as rlog,
     log::Level,
@@ -134,16 +137,20 @@ libretro_variables!(
         screen_ratio: (u32, u32), parse_ratio
             => "Screen Ratio; \
                 4:3 (original)|16:9|21:9",
-        god_mode: bool, parse_bool
-            => "GOD Mode (Invincibility); disabled|enabled",
-        infinite_booster: bool, parse_bool
-            => "Infinite Booster; disabled|enabled",
         draw_debug_outlines: bool, parse_bool
             => "Debug Outlines; disabled|enabled",       
         show_fps: bool, parse_bool
             => "Show FPS; disabled|enabled",
         show_debug_window: bool, parse_bool
             => "Show Debug GUI; disabled|enabled", 
+        god_mode: bool, parse_bool
+            => "GOD Mode (Invincibility); disabled|enabled",
+        infinite_booster: bool, parse_bool
+            => "Infinite Booster; disabled|enabled",
+        noclip: bool, parse_bool
+            => "Noclip; disabled|enabled",
+        more_rust: bool, parse_bool
+            => "More Rust; disabled|enabled", 
 
     });
 
@@ -332,28 +339,33 @@ impl<'a>  Core<'a>  {
 
     fn poll_gamepad(&mut self) {
     
-        // for idx in 0..16 {
-        //     for (ret_but, _) in BUTTON_MAP {
-        //         // //test (fast conditional breakpoint)
-        //         let bt_state = button_pressed(idx as u8, ret_but);
-        //         if bt_state {
-        //             rlog::log(Level::Info, format!("Button pressed: {}:{}", idx, ret_but.as_int()).as_str());
-        //         }
+        // for idx in 0..GAMEPAD_COUNT {
+        //     let output = joystick_analog_state(idx as u8, JoypadAnalog::AnalogButton, JoypadAnalogAxis::L2);
+        //     if output != 0 {
+        //         rlog::log(Level::Info, format!("ID: {} Analog value: {}", idx, output).as_str());
+        //         let bt_state = button_pressed(idx as u8, JoyPadButton::L2);
+        //         rlog::log(Level::Info, format!("Button pressed: {}", bt_state).as_str());
         //     }
         // }
 
     
         for idx in 0..GAMEPAD_COUNT {
+
+            //handle axis
+            for ((ret_bttn, ret_axis),drs_axis) in AXIS_MAP {
+                self.event_loop.update_gamepad_axis(&mut self.context, idx, drs_axis, joystick_analog_state(idx as u8, ret_bttn, ret_axis));
+            }
+
+            //handle buttons
             for (ret_but, drs_but) in BUTTON_MAP {
 
-                // //test (fast conditional breakpoint)
+                //test (fast conditional breakpoint)
                 // let bt_state = button_pressed(idx as u8, ret_but);
-                // if bt_state {
-                    
+                // if bt_state {        
                 //     rlog::log(Level::Info, format!("Button pressed: {}:{}", idx, ret_but as u32).as_str());
                 // }
 
-                self.event_loop.update_gamepad(&mut self.context, idx, drs_but, button_pressed(idx as u8, ret_but));
+                self.event_loop.update_gamepad_key(&mut self.context, idx, drs_but, button_pressed(idx as u8, ret_but));
     
             }
         }
@@ -462,7 +474,9 @@ impl<'a>  libretro::Context  for Core<'a>  {
         self.state_ref.settings.fps_counter = CoreVariables::show_fps();
         self.state_ref.settings.infinite_booster = CoreVariables::infinite_booster();
         self.state_ref.settings.debug_outlines = CoreVariables::draw_debug_outlines();
+        self.state_ref.settings.noclip = CoreVariables::noclip();
         self.state_ref.debugger = CoreVariables::show_debug_window();
+        self.state_ref.more_rust = CoreVariables::more_rust();
 
 
 
@@ -647,10 +661,10 @@ const KEY_MAP: [(Key, ScanCode); 101] = [
 ];
 
 const BUTTON_MAP: [(JoyPadButton, Button); 14] = [
-    (JoyPadButton::A, Button::South),
-    (JoyPadButton::B, Button::East),
-    (JoyPadButton::X, Button::West),
-    (JoyPadButton::Y, Button::North),
+    (JoyPadButton::A, Button::East),
+    (JoyPadButton::B, Button::South),
+    (JoyPadButton::X, Button::North),
+    (JoyPadButton::Y, Button::West),
     (JoyPadButton::Up, Button::DPadUp),
     (JoyPadButton::Down, Button::DPadDown),
     (JoyPadButton::Left, Button::DPadLeft),
@@ -663,3 +677,11 @@ const BUTTON_MAP: [(JoyPadButton, Button); 14] = [
     (JoyPadButton::Start, Button::Start),
 ];
 
+const AXIS_MAP: [((JoypadAnalog, JoypadAnalogAxis), Axis); 6] = [
+    ((JoypadAnalog::AnalogLeft, JoypadAnalogAxis::AnalogX), Axis::LeftX),
+    ((JoypadAnalog::AnalogLeft, JoypadAnalogAxis::AnalogY), Axis::LeftY),
+    ((JoypadAnalog::AnalogRight, JoypadAnalogAxis::AnalogX), Axis::RightX),
+    ((JoypadAnalog::AnalogRight, JoypadAnalogAxis::AnalogY), Axis::RightY),
+    ((JoypadAnalog::AnalogButton, JoypadAnalogAxis::L2), Axis::TriggerLeft),
+    ((JoypadAnalog::AnalogButton, JoypadAnalogAxis::R2), Axis::TriggerRight),
+];

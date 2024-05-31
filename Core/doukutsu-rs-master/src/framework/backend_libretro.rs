@@ -39,7 +39,7 @@ use crate::game::shared_game_state::SharedGameState;
 use crate::game::Game;
 
 use super::keyboard::ScanCode;
-use super::gamepad::Button;
+use super::gamepad::{Button, Axis};
 
 #[derive(PartialEq)]
 pub enum RenderMode {
@@ -197,9 +197,15 @@ impl LibretroEventLoop {
     {
         ctx.keyboard_context.set_key(key_id, key_state);
     } 
-    pub fn update_gamepad(&mut self, ctx: &mut Context, id: u16, button_id: Button, button_state: bool)
+    pub fn update_gamepad_key(&mut self, ctx: &mut Context, id: u16, button_id: Button, button_state: bool)
     {
         ctx.gamepad_context.set_button(id as u32, button_id, button_state);
+    }
+    pub fn update_gamepad_axis(&mut self, ctx: &mut Context, id: u16, axis_id: Axis, value: i16)
+    {
+        let new_value = (value as f64) / i16::MAX as f64; //normalize axis input
+        ctx.gamepad_context.set_axis_value(id as u32, axis_id, new_value);
+        ctx.gamepad_context.update_axes(id as u32);
     }
 
     pub fn add_gamepad(&mut self,
@@ -379,11 +385,6 @@ impl BackendTexture for LibretroTexture {
     fn add(&mut self, _command: SpriteBatchCommand) {
 
         let (tex_scale_x, tex_scale_y) = (1.0 / self.0 as f32, 1.0 / self.1 as f32);
-
-
-
-
-
 
     }
 
