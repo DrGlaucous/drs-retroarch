@@ -224,8 +224,8 @@ impl<'a>  Core<'a>  {
         } else {true};
 
         let rumble_enabled = if !libretro::joypad_rumble_context::register_rumble_callback() {
-            //log::warn!("Failed to init filesystem");
-            rlog::log(Level::Error, "Failed to init filesystem");
+            //log::warn!("Failed to init rumble");
+            rlog::log(Level::Error, "Failed to init rumble");
             false
         } else {true};
 
