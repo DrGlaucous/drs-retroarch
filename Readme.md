@@ -13,15 +13,15 @@ This repo is a "fork" of the [d-rs engine](https://github.com/doukutsu-rs/doukut
 - [x] Audio
 - [ ] V-Sync support
 - [x] Core restarting
-- [x] Input (Keyboard)
-- [ ] Input (Gamepad) *(partially working, currently disabled because it conflicts with keyboard input)* 
+- [ ] Input (Keyboard) *(functions disabled because the keyboard can be mapped to the virualPad)*
+- [x] Input (Gamepad)
 - [x] Core display settings (aspect ratio, scale, etc.)
 - [x] Filesystem
 - [ ] Platforms
   - [x] Windows
   - [X] Linux
   - [ ] Mac OS
-  - [ ] Android
+  - [x] Android
   - [ ] iOS
 
 
@@ -29,9 +29,24 @@ This repo is a "fork" of the [d-rs engine](https://github.com/doukutsu-rs/doukut
 <details>
 	<summary>Notes</summary>
 	To compile retroarch to use openglES, use:</br>
-	<code>./configure --disable-videocore --disable-opengl1 --enable-opengles --enable-opengles3 --enable-opengles3_1</code></br>
+	<code>
+  ./configure --disable-videocore --disable-opengl1 --enable-opengles --enable-opengles3 --enable-opengles3_1
+  </code>
+  
+  </br>
    then</br>
 	<code>make</code>
+
+  to compile on mac for iOS, use
+  `cargo lipo --release`
+
+  then use codesign to give it an ad-hoc signature so it will run in retroarch:
+  `codesign -s - drsretroarch.dylib`
+
+  check sign status with
+  `codesign -d -v drsretroarch.dylib`
+
+
 </details>
 
 
