@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
 use std::pin::Pin;
+use std::ffi::CStr;
 
 use libc::{c_char, c_uint};
 //use libretro_rs::retro::JoypadButton;
@@ -195,7 +196,7 @@ impl<'a>  Core<'a>  {
 
         //try different openGL versions
         let mut render_mode = RenderMode::OpenGl;
-        if !libretro::hw_context::init(ContextType::OpenGlCore, 3, 0) {
+        if !libretro::hw_context::init(ContextType::OpenGlCore, 2, 1) {
             render_mode = RenderMode::OpenGlES;
             if !libretro::hw_context::init(ContextType::OpenGlEs2, 2, 1) {
                 //log::warn!("Failed to init hardware context");
@@ -250,7 +251,17 @@ impl<'a>  Core<'a>  {
         resource_dir.push("data");
 
         //set path for the game saves. If we can, start by putting the saves in the global retroarch directory. If not, put it in the portable directory
-        let user_dir = if let Some(dir) = get_save_directory() {dir} else {
+        let user_dir = if let Some(mut dir) = get_save_directory() {
+
+            //check to make sure there is a d-rs subdirectory for us (not all frontends give us one, but some do.)
+            let lib_name = unsafe {CStr::from_ptr(SYSTEM_INFO.library_name).to_bytes().to_vec()};
+            let lib_name = String::from_utf8(lib_name).unwrap();
+            if !dir.ends_with(&lib_name) {
+                dir.push(lib_name);
+            }
+            dir
+
+        } else {
             //log::warn!("Failed to get save directory. Using portable directory.");
             rlog::log(Level::Warn, "Failed to get save directory. Using portable directory.");
             
