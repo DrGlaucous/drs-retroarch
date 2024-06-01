@@ -460,6 +460,12 @@ const FRAGMENT_SHADER3_TEXTURED: &str = include_str!("shaders/opengl3/fragment_t
 const FRAGMENT_SHADER3_COLOR: &str = include_str!("shaders/opengl3/fragment_color_330.glsl");
 const FRAGMENT_SHADER3_WATER: &str = include_str!("shaders/opengl3/fragment_water_330.glsl");
 
+const VERTEX_SHADERM_BASIC: &str = include_str!("shaders/openglm/vertex_basic_m.glsl");
+const FRAGMENT_SHADERM_TEXTURED: &str = include_str!("shaders/openglm/fragment_textured_m.glsl");
+const FRAGMENT_SHADERM_COLOR: &str = include_str!("shaders/openglm/fragment_color_m.glsl");
+const FRAGMENT_SHADERM_WATER: &str = include_str!("shaders/openglm/fragment_water_m.glsl");
+
+
 #[derive(Copy, Clone)]
 struct RenderShader {
     program_id: GLuint,
@@ -638,10 +644,17 @@ impl RenderData {
         //  let fshdr_fill = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER_COLOR };
         //  let fshdr_fill_water = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER_WATER };
 
-        let vshdr_basic = if gles2_mode { VERTEX_SHADER_BASIC_GLES } else { VERTEX_SHADER3_BASIC };
-        let fshdr_tex = if gles2_mode { FRAGMENT_SHADER_TEXTURED_GLES } else { FRAGMENT_SHADER3_TEXTURED };
-        let fshdr_fill = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER3_COLOR };
-        let fshdr_fill_water = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER3_WATER };
+        // let vshdr_basic = if gles2_mode { VERTEX_SHADER_BASIC_GLES } else { VERTEX_SHADER3_BASIC };
+        // let fshdr_tex = if gles2_mode { FRAGMENT_SHADER_TEXTURED_GLES } else { FRAGMENT_SHADER3_TEXTURED };
+        // let fshdr_fill = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER3_COLOR };
+        // let fshdr_fill_water = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER3_WATER };
+
+        let vshdr_basic = if gles2_mode { VERTEX_SHADER_BASIC_GLES } else { VERTEX_SHADERM_BASIC };
+        let fshdr_tex = if gles2_mode { FRAGMENT_SHADER_TEXTURED_GLES } else { FRAGMENT_SHADERM_TEXTURED };
+        let fshdr_fill = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADERM_COLOR };
+        let fshdr_fill_water = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADERM_WATER };
+
+        
 
 
         unsafe {

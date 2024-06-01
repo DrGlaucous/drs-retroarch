@@ -7,7 +7,7 @@ uniform float Scale;
 uniform vec2 FrameOffset;
 in vec4 Frag_Color;
 
-out vec4 gl_FragColor;
+out vec4 ogl_FragColor;
 
 void main()
 {
@@ -20,25 +20,25 @@ void main()
     float off = 0.35 * Scale * resolution_inv.y;
     float off2 = 2.0 * off;
 
-    vec3 color = texture2D(Texture, wave).rgb * 0.25;
-    color += texture2D(Texture, wave + vec2(0, off)).rgb * 0.125;
-    color += texture2D(Texture, wave + vec2(0, -off)).rgb * 0.125;
+    vec3 color = texture(Texture, wave).rgb * 0.25;
+    color += texture(Texture, wave + vec2(0, off)).rgb * 0.125;
+    color += texture(Texture, wave + vec2(0, -off)).rgb * 0.125;
 
-    color.rg += texture2D(Texture, wave + vec2(-off, -off)).rg * 0.0625;
-    color.rg += texture2D(Texture, wave + vec2(-off, 0)).rg * 0.125;
-    color.rg += texture2D(Texture, wave + vec2(-off, off)).rg * 0.0625;
-    color.b += texture2D(Texture, wave + vec2(-off2, -off)).b * 0.0625;
-    color.b += texture2D(Texture, wave + vec2(-off2, 0)).b * 0.125;
-    color.b += texture2D(Texture, wave + vec2(-off2, off)).b * 0.0625;
+    color.rg += texture(Texture, wave + vec2(-off, -off)).rg * 0.0625;
+    color.rg += texture(Texture, wave + vec2(-off, 0)).rg * 0.125;
+    color.rg += texture(Texture, wave + vec2(-off, off)).rg * 0.0625;
+    color.b += texture(Texture, wave + vec2(-off2, -off)).b * 0.0625;
+    color.b += texture(Texture, wave + vec2(-off2, 0)).b * 0.125;
+    color.b += texture(Texture, wave + vec2(-off2, off)).b * 0.0625;
 
-    color.rg += texture2D(Texture, wave + vec2(off, off)).gb * 0.0625;
-    color.rg += texture2D(Texture, wave + vec2(off, 0)).gb * 0.125;
-    color.rg += texture2D(Texture, wave + vec2(off, -off)).gb * 0.0625;
-    color.b += texture2D(Texture, wave + vec2(off2, off)).r * 0.0625;
-    color.b += texture2D(Texture, wave + vec2(off2, 0)).r * 0.125;
-    color.b += texture2D(Texture, wave + vec2(off2, -off)).r * 0.0625;
+    color.rg += texture(Texture, wave + vec2(off, off)).gb * 0.0625;
+    color.rg += texture(Texture, wave + vec2(off, 0)).gb * 0.125;
+    color.rg += texture(Texture, wave + vec2(off, -off)).gb * 0.0625;
+    color.b += texture(Texture, wave + vec2(off2, off)).r * 0.0625;
+    color.b += texture(Texture, wave + vec2(off2, 0)).r * 0.125;
+    color.b += texture(Texture, wave + vec2(off2, -off)).r * 0.0625;
 
     color *= (1.0 - Frag_Color.a);
     color += Frag_Color.rgb * Frag_Color.a;
-    gl_FragColor = vec4(color, 1.0);
+    ogl_FragColor = vec4(color, 1.0);
 }
