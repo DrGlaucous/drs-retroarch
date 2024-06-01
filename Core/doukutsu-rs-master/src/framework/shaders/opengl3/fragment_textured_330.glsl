@@ -1,8 +1,10 @@
-//#version 330
+#version 330 core
 
 uniform sampler2D Texture;
-varying vec2 Frag_UV;
-varying vec4 Frag_Color;
+in vec2 Frag_UV;
+in vec4 Frag_Color;
+
+out vec4 gl_FragColor;
 
 void main()
 {

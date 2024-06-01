@@ -1,11 +1,13 @@
-//#version 330
+#version 330 core
 
 uniform mat4 ProjMtx;
 uniform sampler2D Texture;
 uniform float Time;
 uniform float Scale;
 uniform vec2 FrameOffset;
-varying vec4 Frag_Color;
+in vec4 Frag_Color;
+
+out vec4 gl_FragColor;
 
 void main()
 {
