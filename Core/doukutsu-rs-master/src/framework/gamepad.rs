@@ -29,6 +29,7 @@ pub enum GamepadType {
     NintendoSwitchJoyConLeft,
     NintendoSwitchJoyConRight,
     NintendoSwitchJoyConPair,
+    Retropad,
 }
 
 impl GamepadType {
@@ -48,6 +49,7 @@ impl GamepadType {
             GamepadType::NintendoSwitchJoyConLeft => "Nintendo Switch Joy-Con (left)",
             GamepadType::NintendoSwitchJoyConRight => "Nintendo Switch Joy-Con (right)",
             GamepadType::NintendoSwitchJoyConPair => "Nintendo Switch Joy-Con (pair)",
+            GamepadType::Retropad => "Retroarch virtual controller",
         }
     }
 }
@@ -206,6 +208,7 @@ impl GamepadData {
             | GamepadType::NintendoSwitchJoyConLeft
             | GamepadType::NintendoSwitchJoyConRight
             | GamepadType::NintendoSwitchJoyConPair => 3,
+            GamepadType::Retropad => 3,
             _ => 1,
         }
     }

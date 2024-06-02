@@ -6,7 +6,7 @@ use std::mem;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::vec::Vec;
-
+use num_traits::Num;
 
 // //new libretro stuff (copied from example)
 // use libretro_rs::c_utf8::c_utf8;
@@ -29,6 +29,7 @@ use crate::framework::context::Context;
 use crate::framework::error::{GameResult, GameError};
 use crate::framework::gamepad::GamepadType;
 use crate::framework::graphics::BlendMode;
+use crate::input::touch_controls::TouchPoint;
 
 
 //gl stuff
@@ -85,7 +86,8 @@ impl Backend for LibretroBackend {
 
 pub struct LibretroEventLoop {
     refs: Rc<RefCell<LibretroContext>>,
-    render_mode: RenderMode
+    render_mode: RenderMode,
+    touchpad_context: LibretroTouchpad,
 }
 
 //holds things like openGL renderer, keystrokes, and audio? (maybe?)
@@ -106,9 +108,10 @@ impl LibretroEventLoop {
         let event_loop = LibretroEventLoop {
             refs: Rc::new(RefCell::new(LibretroContext{
                 get_current_framebuffer,
-                get_proc_address
+                get_proc_address,
             })),
             render_mode: render_mode,
+            touchpad_context: LibretroTouchpad::new(10),
         };
 
         Ok(Box::new(event_loop))
@@ -218,11 +221,20 @@ impl LibretroEventLoop {
 
         let axis_sensitivity = state_ref.settings.get_gamepad_axis_sensitivity(id);
         ctx.gamepad_context.add_gamepad(LibretroGamepad::new(id, rumble_fn), axis_sensitivity);
-        ctx.gamepad_context.set_gamepad_type(id, GamepadType::Virtual);
+        ctx.gamepad_context.set_gamepad_type(id, GamepadType::Retropad);
     }
 
-    pub fn remove_gamepad(&mut self, ctx: &mut Context, id: u32) {
-        ctx.gamepad_context.remove_gamepad(id);
+    pub fn remove_gamepad(&mut self, ctx: &mut Context, id: u16) {
+        ctx.gamepad_context.remove_gamepad(id as u32);
+    }
+
+    pub fn update_touchpad(&mut self, x: i16, y: i16, id: u16) {
+        self.touchpad_context.set_point(x, y, id);
+    }
+    pub fn finalize_touchpad(&mut self, state_ref: &mut SharedGameState) {
+        self.touchpad_context.finalize_points();
+
+        self.touchpad_context.push_points(state_ref);
     }
 
 
@@ -368,6 +380,254 @@ impl BackendGamepad for LibretroGamepad {
     }
 
 }
+
+
+//used to implement some important methods (like touchdown, moved, and touchup) that libretro doesn't do
+#[derive(Clone, PartialEq)]
+enum TouchpointState {
+    Started,
+    Moved,
+    Ended,
+}
+#[derive(Clone)]
+struct LibretroTouchpoint {
+    x: f32,
+    y: f32,
+    id: i32,
+    state: TouchpointState,
+    updated: bool,
+}
+impl LibretroTouchpoint {
+    pub fn new() -> LibretroTouchpoint {
+        LibretroTouchpoint {
+            x: 0.0,
+            y: 0.0,
+            id: -1, //-1 if slot is empty
+            state: TouchpointState::Ended,
+            updated: false,
+
+
+        }
+    }
+}
+struct LibretroTouchpad {
+    touchpoints: Vec<LibretroTouchpoint>,
+    last_touchpoints: Vec<LibretroTouchpoint>,
+
+    point_count: u16,
+
+    last_point_count: u16,
+
+}
+
+impl LibretroTouchpad {
+    pub fn new(max_points: u16) -> LibretroTouchpad{
+        LibretroTouchpad {
+            touchpoints: vec![LibretroTouchpoint::new(); max_points as usize],
+            last_touchpoints: vec![LibretroTouchpoint::new(); max_points as usize],
+
+            point_count: 0,
+
+            last_point_count: 0,
+
+        }
+    }
+
+    pub fn set_point(&mut self, x: i16, y: i16, idx: u16) {
+
+
+        //check though used ids list to see if that id is active (what index?)
+        //if not active, find the first '-1' index and activate it with this id
+        //if yes active, update state and location (normalize it)
+
+        //let touchpoints = if self.active_tp {&mut self.touchpoint_set_0} else {&mut self.touchpoint_set_1};
+
+        let idx = idx as usize;
+
+        if idx < self.touchpoints.len() {
+            
+            //new touchpoint, register an unused ID
+            if self.touchpoints[idx].id == -1 {
+
+                let mut new_id = 0;
+                //iterate through touchpoints to see what they have
+                for mut odx in 0..self.touchpoints.len() {
+                    //found a match, can't use, so try the next ID
+                    if new_id == self.touchpoints[odx].id {
+                        new_id += 1;
+                        odx = 0;
+                    }
+                }
+                self.touchpoints[idx].id = new_id;
+                self.touchpoints[idx].state = TouchpointState::Started;
+
+            } else {
+                self.touchpoints[idx].state = TouchpointState::Moved;
+            }
+
+            self.touchpoints[idx].x = x as f32;
+            self.touchpoints[idx].y = y as f32;
+            self.touchpoints[idx].updated = true;
+
+            self.point_count += 1;
+        }
+
+
+    }
+
+    pub fn finalize_points(&mut self){
+
+
+        //iterate through point list and knock off any that are "ended"
+        for curr_tp in self.touchpoints.iter_mut() {
+            if curr_tp.state == TouchpointState::Ended && curr_tp.id != -1 {
+                curr_tp.id = -1;
+            }
+        }
+
+        //see if current_point_count matches last_point count
+        //if it is less, find the point that was lifted and set its state to "ended", to be knocked off next cycle
+        
+        //note: point IDs are not static! each time a point is lifted, we play a round of musical chairs with IDs
+        if self.point_count < self.last_point_count {
+
+            //find the closest point to each new point.
+            //when all are found, there will be an index in the old points that is refrenced by none
+
+            //for each valid ID in our new pointset, give it the ID of the closest old point
+            for curr_tp in self.touchpoints.iter_mut() {
+
+                curr_tp.id = -1; //since indexes changed, current IDs don't mean anything anymore
+                if !curr_tp.updated {continue;}
+
+                curr_tp.updated = false; //reset these while we're here
+
+                let mut winner_dist: f32 = f32::MAX;
+                for last_tp in self.last_touchpoints.iter_mut() {
+                    if last_tp.id == -1 {continue;}
+                    let dist = Self::get_dist(curr_tp.x, curr_tp.y, last_tp.x, last_tp.y);
+                    //update winner credentials
+                    if dist < winner_dist {
+                        curr_tp.id = last_tp.id;
+                        winner_dist = dist;
+
+                        last_tp.updated = true; //re-using this variable to determine which old points were refrenced
+                    }
+                }
+            }
+
+            //find the old point refrenced by none
+            for (idx, last_tp) in self.last_touchpoints.iter_mut().enumerate() {
+                if last_tp.updated || last_tp.id == -1 {continue;}
+
+                // let mut has_match = false;
+                // for curr_tp in self.touchpoints.iter_mut() {
+                //     if last_tp.id == curr_tp.id {
+                //         has_match = true;
+                //         break;
+                //     } //ignore IDs that match
+                // }
+                // if has_match {continue;}
+
+                //point matched by none, set current state to ended
+                //this point will be knocked off next cycle
+                //self.touchpoints[idx].state = TouchpointState::Ended;
+                
+                //put that point at the end of the list
+                for curr_tp in self.touchpoints.iter_mut() {
+                    if curr_tp.id == -1 {
+                        (curr_tp.id, curr_tp.x, curr_tp.y) = (last_tp.id, last_tp.x, last_tp.y);
+                        curr_tp.state = TouchpointState::Ended;
+                        break;
+                    }
+                }
+
+
+            }
+
+
+        } else {
+            //reset update value
+            for curr_tp in self.touchpoints.iter_mut() {curr_tp.updated = false;}
+        }
+
+        //update old touchpoints (clone_from is better than clone here since it shouldn't allocate a third vector)
+        self.last_touchpoints.clone_from(&self.touchpoints);
+
+        self.last_point_count = self.point_count;
+        self.point_count = 0;
+
+        self.print_clicked();
+    }
+
+    fn get_dist(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+        ((x2 - x1).powf(2.0) + (y2 - y1).powf(2.0)).sqrt()
+    }
+
+    fn print_clicked(&self) {
+
+        for curr_tp in self.touchpoints.iter() {
+            if curr_tp.state == TouchpointState::Started {
+                log::info!("Screen Clicked at {} - {}:{}", curr_tp.id, curr_tp.x, curr_tp.y);
+            }
+            if curr_tp.state == TouchpointState::Ended && curr_tp.id != -1 {
+                log::info!("Screen Released at {} - {}:{}", curr_tp.id, curr_tp.x, curr_tp.y);
+            }
+
+        }
+
+    }
+
+    #[inline]
+    fn map<T: Num + PartialOrd + Copy>(x: T, in_min: T, in_max: T, out_min: T, out_max: T) -> T {
+        (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+    }
+
+    pub fn push_points(&self, state_ref: &mut SharedGameState) {
+        
+        let mut controls = &mut state_ref.touch_controls;
+
+        for touchpoint in &self.touchpoints {
+            if touchpoint.id != -1 {
+
+                let loc_x = Self::map(touchpoint.x as f32, i16::MIN as f32, i16::MAX as f32, 0.0, state_ref.canvas_size.0) as f64;
+                let loc_y = Self::map(touchpoint.x as f32, i16::MIN as f32, i16::MAX as f32, 0.0, state_ref.canvas_size.1) as f64;
+                match touchpoint.state {
+                    TouchpointState::Started |
+                    TouchpointState::Moved => {
+
+                        if let Some(point) = controls.points.iter_mut().find(|p| p.id == touchpoint.id as u64) {
+                            point.last_position = point.position;
+                            point.position = (loc_x, loc_y);
+                        } else {
+                            controls.touch_id_counter = controls.touch_id_counter.wrapping_add(1);
+
+                            let point = TouchPoint {
+                                id: touchpoint.id as u64,
+                                touch_id: controls.touch_id_counter,
+                                position: (loc_x, loc_y),
+                                last_position: (0.0, 0.0),
+                            };
+                            controls.points.push(point);
+
+                            if touchpoint.state == TouchpointState::Started {
+                                controls.clicks.push(point);
+                            }
+                        }
+
+                    },
+                    TouchpointState::Ended => {
+                        controls.points.retain(|p| p.id != touchpoint.id as u64);
+                        controls.clicks.retain(|p| p.id != touchpoint.id as u64);
+                    },
+                }
+            }
+        }
+    }
+
+
+}
+
 
 //todo: fallback software renderer (not opengl)
 //actually puts the stuff onto the screen, 

@@ -384,6 +384,16 @@ pub enum JoypadAnalogAxis {
     L2 = 12,
     R2 = 13,
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum TouchpadAttribute {
+    LocationX = 0,
+    LocationY = 1,
+    Pressed = 2, //typically keep iterating as long as this is true
+    TotalCount = 3,
+}
+
+
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PixelFormat {
@@ -1212,6 +1222,18 @@ pub fn joystick_analog_state(port: u8, bttn: JoypadAnalog, axis: JoypadAnalogAxi
                     axis as c_uint)
     }
 }
+
+
+//get state of touchpads (location/pressed state/count)
+pub fn touchpad_analog_state(port: u8, touch_id: u32, attribute: TouchpadAttribute) -> i16 {
+    unsafe {
+        INPUT_STATE(port as c_uint,
+                    InputDevice::Pointer as c_uint,
+                    touch_id as c_uint,
+                    attribute as c_uint)
+    }
+}
+
 
 //check if a key is pressed (is also needed if keys are bound to the joypad...?)
 pub fn key_pressed(port: u8, k: Key) -> bool {

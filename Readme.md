@@ -14,38 +14,44 @@ This repo is a "fork" of the [d-rs engine](https://github.com/doukutsu-rs/doukut
 - [ ] V-Sync support
 - [x] Core restarting
 - [ ] Input (Keyboard) *(functions disabled because the keyboard can be mapped to the virualPad)*
+- [ ] Input (touch) *(carryover from the android port where certain items like menus can be interracted with)*
 - [x] Input (Gamepad)
 - [x] Core display settings (aspect ratio, scale, etc.)
 - [x] Filesystem
 - [ ] Platforms
   - [x] Windows
   - [X] Linux
-  - [ ] Mac OS
+  - [ ] Mac OS *(openGL shaders are currently broken here)*
   - [x] Android
-  - [ ] iOS
+  - [X] iOS
+
+
+### Use
+It its current state, d-rs runs on 4/5 "big" platforms. *(mac OS was tried, but the compatibility context for harware rendering was broken. Shaders for the backend would not compile, and if the openGL context were set to a version where they'd work, the **frontend's** shaders would break. This doesn't matter too much since d-rs already has a native mac port)*
+
 
 
 ### Personal notes
 <details>
-	<summary>Notes</summary>
-	To compile retroarch to use openglES, use:</br>
-	<code>
-  ./configure --disable-videocore --disable-opengl1 --enable-opengles --enable-opengles3 --enable-opengles3_1
-  </code>
-  
-  </br>
-   then</br>
-	<code>make</code>
 
-  to compile on mac for iOS, use
-  `cargo lipo --release`
+<summary>Notes</summary>
+To compile retroarch to use openglES, use:</br>
+<code>
+./configure --disable-videocore --disable-opengl1 --enable-opengles --enable-opengles3 --enable-opengles3_1
+</code>
 
-  then use codesign to give it an ad-hoc signature so it will run in retroarch:
-  `codesign -s - drsretroarch.dylib`
+</br>
+then</br>
+<code>make</code>
 
-  check sign status with
-  `codesign -d -v drsretroarch.dylib`
+to compile on mac for iOS, use
+`cargo lipo --release`
 
+then use codesign to give it an ad-hoc signature so it will run in retroarch:
+`codesign -s - drsretroarch.dylib`
+
+check sign status with
+`codesign -d -v drsretroarch.dylib`
 
 </details>
 

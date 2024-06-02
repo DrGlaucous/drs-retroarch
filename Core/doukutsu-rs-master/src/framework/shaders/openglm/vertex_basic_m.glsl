@@ -1,4 +1,4 @@
-#version 110
+//#version 110
 
 uniform mat4 ProjMtx;
 attribute vec2 Position;

@@ -292,7 +292,7 @@ impl Clone for TitleConsts {
 
 #[derive(Debug)]
 pub struct GamepadConsts {
-    pub button_rects: HashMap<Button, [Rect<u16>; 4]>,
+    pub button_rects: HashMap<Button, [Rect<u16>; 4]>, //each button has 4 rects
     pub axis_rects: HashMap<Axis, [Rect<u16>; 4]>,
 }
 
@@ -305,10 +305,10 @@ impl Clone for GamepadConsts {
 impl GamepadConsts {
     fn rects(base: Rect<u16>) -> [Rect<u16>; 4] {
         [
-            base,
-            Rect::new(base.left + 64, base.top, base.right + 64, base.bottom),
-            Rect::new(base.left + 128, base.top, base.right + 128, base.bottom),
-            Rect::new(base.left + 64, base.top + 128, base.right + 64, base.bottom + 128),
+            base, //psx
+            Rect::new(base.left + 64, base.top, base.right + 64, base.bottom), //xbox
+            Rect::new(base.left + 128, base.top, base.right + 128, base.bottom), //psx (mono)
+            Rect::new(base.left + 64, base.top + 128, base.right + 64, base.bottom + 128), //nintendo (but wrong?)
         ]
     }
 }

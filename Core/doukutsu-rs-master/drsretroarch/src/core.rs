@@ -31,6 +31,7 @@ use crate::libretro::{self,
     joypad_rumble_context,
     key_pressed,
     joystick_analog_state,
+    touchpad_analog_state,
     send_audio_samples,
     set_geometry,
     request_shutdown,
@@ -38,6 +39,7 @@ use crate::libretro::{self,
     JoyPadButton,
     JoypadAnalog,
     JoypadAnalogAxis,
+    TouchpadAttribute,
     Key,
     log as rlog,
     log::Level,
@@ -196,7 +198,7 @@ impl<'a>  Core<'a>  {
 
         //try different openGL versions
         let mut render_mode = RenderMode::OpenGl;
-        if !libretro::hw_context::init(ContextType::OpenGlCore, 2, 1) {
+        if !libretro::hw_context::init(ContextType::OpenGlCore, 3, 0) {
             render_mode = RenderMode::OpenGlES;
             if !libretro::hw_context::init(ContextType::OpenGlEs2, 2, 1) {
                 //log::warn!("Failed to init hardware context");
@@ -379,9 +381,26 @@ impl<'a>  Core<'a>  {
                 self.event_loop.update_gamepad_key(&mut self.context, idx, drs_but, button_pressed(idx as u8, ret_but));
     
             }
+
+
         }
     }
 
+    fn poll_touch(&mut self) {
+
+        let mut iterator = 0;
+        while touchpad_analog_state(0, iterator, TouchpadAttribute::Pressed) != 0 {
+
+            let x = touchpad_analog_state(0, iterator, TouchpadAttribute::LocationX);
+            let y = touchpad_analog_state(0, iterator, TouchpadAttribute::LocationY);
+
+            self.event_loop.update_touchpad(x, y, iterator as u16);
+
+            iterator += 1;
+        }
+        self.event_loop.finalize_touchpad(&mut self.state_ref);
+
+    }
 
     fn run_audio(&mut self) {
 
@@ -448,9 +467,11 @@ impl<'a>  libretro::Context  for Core<'a>  {
     fn render_frame(&mut self) {
 
 
+        self.poll_gamepad();
+        
+        //(almost) implemented, but not completely as it isn't needed and I'm tired
+        //self.poll_touch();
         //self.poll_keys();
-        self.poll_gamepad(); //todo: enable this (currently having controller mapping problems where it conflicts with the keyboard)
-
 
         self.event_loop.update(self.state_ref, self.game.as_mut().get_mut(), &mut self.context, self.delta_time as u64);
         gl_frame_done(self.screen_width, self.screen_height);
