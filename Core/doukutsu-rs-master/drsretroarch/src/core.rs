@@ -136,7 +136,7 @@ libretro_variables!(
     struct CoreVariables (prefix = "d-rs") {
         internal_upscale_factor: u32, parse_numeric
             => "Internal upscaling factor; \
-                1x (native)|2x|3x",
+                1x (freeware)|2x (CS+)|3x|4x",
         screen_ratio: (u32, u32), parse_ratio
             => "Screen Ratio; \
                 4:3 (original)|16:9|21:9",
