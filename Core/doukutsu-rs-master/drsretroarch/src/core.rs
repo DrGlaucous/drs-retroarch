@@ -342,6 +342,7 @@ impl<'a>  Core<'a>  {
     }
 
     // mainly for testing, having this active as well as the gamepad results in some conflicts because some buttons are applied 2x
+    #[allow(unused)]
     fn poll_keys(&mut self) {
         
         for (ret_key, drs_key) in KEY_MAP {
@@ -365,8 +366,17 @@ impl<'a>  Core<'a>  {
         for idx in 0..GAMEPAD_COUNT {
 
             //handle axis
-            for ((ret_bttn, ret_axis),drs_axis) in AXIS_MAP {
-                self.event_loop.update_gamepad_axis(&mut self.context, idx, drs_axis, joystick_analog_state(idx as u8, ret_bttn, ret_axis));
+            for ((ret_stick, ret_axis, ret_but),drs_axis) in AXIS_MAP {
+                let mut analog_value = joystick_analog_state(idx as u8, ret_stick, ret_axis);
+                //required for touch or keybound L2/R2 buttons, since they don't register an analog value that way, but d-rs still needs one
+                if ret_stick == JoypadAnalog::AnalogButton
+                && analog_value == 0
+                && button_pressed(idx as u8, ret_but) {
+                    analog_value = i16::MAX;
+                }
+                self.event_loop.update_gamepad_axis(&mut self.context, idx, drs_axis, analog_value);
+                
+
             }
 
             //handle buttons
@@ -386,6 +396,7 @@ impl<'a>  Core<'a>  {
         }
     }
 
+    #[allow(unused)]
     fn poll_touch(&mut self) {
 
         let mut iterator = 0;
@@ -481,10 +492,10 @@ impl<'a>  libretro::Context  for Core<'a>  {
             request_shutdown();
         }
 
-        //run audio synchronously?
-        if !self.async_audio_enabled {
-            self.run_audio();
-        }
+        //run audio synchronously? (todo: make audio batch sample size dynamic for this to work)
+        // if !self.async_audio_enabled {
+        //     self.run_audio();
+        // }
 
 
     }
@@ -709,11 +720,11 @@ const BUTTON_MAP: [(JoyPadButton, Button); 14] = [
     (JoyPadButton::Start, Button::Start),
 ];
 
-const AXIS_MAP: [((JoypadAnalog, JoypadAnalogAxis), Axis); 6] = [
-    ((JoypadAnalog::AnalogLeft, JoypadAnalogAxis::AnalogX), Axis::LeftX),
-    ((JoypadAnalog::AnalogLeft, JoypadAnalogAxis::AnalogY), Axis::LeftY),
-    ((JoypadAnalog::AnalogRight, JoypadAnalogAxis::AnalogX), Axis::RightX),
-    ((JoypadAnalog::AnalogRight, JoypadAnalogAxis::AnalogY), Axis::RightY),
-    ((JoypadAnalog::AnalogButton, JoypadAnalogAxis::L2), Axis::TriggerLeft),
-    ((JoypadAnalog::AnalogButton, JoypadAnalogAxis::R2), Axis::TriggerRight),
+const AXIS_MAP: [((JoypadAnalog, JoypadAnalogAxis, JoyPadButton), Axis); 6] = [
+    ((JoypadAnalog::AnalogLeft, JoypadAnalogAxis::AnalogX, JoyPadButton::A), Axis::LeftX),
+    ((JoypadAnalog::AnalogLeft, JoypadAnalogAxis::AnalogY, JoyPadButton::A), Axis::LeftY),
+    ((JoypadAnalog::AnalogRight, JoypadAnalogAxis::AnalogX, JoyPadButton::A), Axis::RightX),
+    ((JoypadAnalog::AnalogRight, JoypadAnalogAxis::AnalogY, JoyPadButton::A), Axis::RightY),
+    ((JoypadAnalog::AnalogButton, JoypadAnalogAxis::L2, JoyPadButton::L2), Axis::TriggerLeft),
+    ((JoypadAnalog::AnalogButton, JoypadAnalogAxis::R2, JoyPadButton::R2), Axis::TriggerRight),
 ];
