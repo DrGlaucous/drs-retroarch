@@ -38,7 +38,7 @@ pub fn handle_err(gl: &Gl, extra_info: u32) {
         //gl::INVALID_ENUM
         if err != 0 && extra_info != 1 {
         //if err != 0 {
-            //log::error!("OpenGL error: {}", err);
+            log::error!("OpenGL error: {}", err);
         }
     }
 
@@ -161,6 +161,7 @@ pub struct OpenGLTexture {
     framebuffer_id: u32,
     shader: RenderShader,
     vbo: GLuint,
+    vao: GLuint,
     vertices: Vec<VertexData>,
     context_active: Arc<RefCell<bool>>,
 }
@@ -351,10 +352,12 @@ impl BackendTexture for OpenGLTexture {
                 if gl.gl.BindSampler.is_loaded() {
                     gl.gl.BindSampler(0, 0);
                 }
+                handle_err(gl, 0);
 
                 //err between this
                 handle_err(gl, 0);
-                gl.gl.Enable(gl::TEXTURE_2D); //screams at us with context version 3,3, but not with 2,1 or 3,0
+                //gl.gl.Enable(gl::TEXTURE_2D); //screams at us with context version 3,3, but not with 2,1 or 3,0 (new pipeline depricates this function)
+
 
                 handle_err(gl, 0);
                 gl.gl.Enable(gl::BLEND);
@@ -365,7 +368,7 @@ impl BackendTexture for OpenGLTexture {
                 //... and this
 
 
-                self.shader.bind_attrib_pointer(gl, self.vbo);
+                self.shader.bind_attrib_pointer(gl, self.vbo, self.vao);
 
                 gl.gl.BindTexture(gl::TEXTURE_2D, self.texture_id);
                 gl.gl.BufferData(
@@ -455,10 +458,10 @@ const FRAGMENT_SHADER_TEXTURED_GLES: &str = include_str!("shaders/opengles/fragm
 const FRAGMENT_SHADER_COLOR_GLES: &str = include_str!("shaders/opengles/fragment_color_100.glsl");
 
 
-const VERTEX_SHADER3_BASIC: &str = include_str!("shaders/opengl3/vertex_basic_330.glsl");
-const FRAGMENT_SHADER3_TEXTURED: &str = include_str!("shaders/opengl3/fragment_textured_330.glsl");
-const FRAGMENT_SHADER3_COLOR: &str = include_str!("shaders/opengl3/fragment_color_330.glsl");
-const FRAGMENT_SHADER3_WATER: &str = include_str!("shaders/opengl3/fragment_water_330.glsl");
+const VERTEX_SHADER4_BASIC: &str = include_str!("shaders/opengl4/vertex_basic_410.glsl");
+const FRAGMENT_SHADER4_TEXTURED: &str = include_str!("shaders/opengl4/fragment_textured_410.glsl");
+const FRAGMENT_SHADER4_COLOR: &str = include_str!("shaders/opengl4/fragment_color_410.glsl");
+const FRAGMENT_SHADER4_WATER: &str = include_str!("shaders/opengl4/fragment_water_410.glsl");
 
 const VERTEX_SHADERM_BASIC: &str = include_str!("shaders/openglm/vertex_basic_m.glsl");
 const FRAGMENT_SHADERM_TEXTURED: &str = include_str!("shaders/openglm/fragment_textured_m.glsl");
@@ -561,10 +564,14 @@ impl RenderShader {
         Ok(shader)
     }
 
-    unsafe fn bind_attrib_pointer(&self, gl: &Gl, vbo: GLuint) -> GameResult {
+    unsafe fn bind_attrib_pointer(&self, gl: &Gl, vbo: GLuint, vao: GLuint) -> GameResult {
         handle_err(gl, 0);
         gl.gl.UseProgram(self.program_id);
         handle_err(gl, 0);
+
+        gl.gl.BindVertexArray(vao);
+        handle_err(gl, 0);
+
         gl.gl.BindBuffer(gl::ARRAY_BUFFER, vbo);
         handle_err(gl, 0);
         gl.gl.EnableVertexAttribArray(self.position);
@@ -610,6 +617,7 @@ struct RenderData {
     tex_shader: RenderShader,
     fill_shader: RenderShader,
     fill_water_shader: RenderShader,
+    vao: GLuint,
     vbo: GLuint,
     ebo: GLuint,
     font_texture: GLuint,
@@ -626,6 +634,7 @@ impl RenderData {
             tex_shader: RenderShader::default(),
             fill_shader: RenderShader::default(),
             fill_water_shader: RenderShader::default(),
+            vao: 0,
             vbo: 0,
             ebo: 0,
             font_texture: 0,
@@ -644,15 +653,15 @@ impl RenderData {
         // let fshdr_fill = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER_COLOR };
         // let fshdr_fill_water = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER_WATER };
 
-        // let vshdr_basic = if gles2_mode { VERTEX_SHADER_BASIC_GLES } else { VERTEX_SHADER3_BASIC };
-        // let fshdr_tex = if gles2_mode { FRAGMENT_SHADER_TEXTURED_GLES } else { FRAGMENT_SHADER3_TEXTURED };
-        // let fshdr_fill = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER3_COLOR };
-        // let fshdr_fill_water = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER3_WATER };
+        let vshdr_basic = if gles2_mode { VERTEX_SHADER_BASIC_GLES } else { VERTEX_SHADER4_BASIC };
+        let fshdr_tex = if gles2_mode { FRAGMENT_SHADER_TEXTURED_GLES } else { FRAGMENT_SHADER4_TEXTURED };
+        let fshdr_fill = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER4_COLOR };
+        let fshdr_fill_water = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER4_WATER };
 
-        let vshdr_basic = if gles2_mode { VERTEX_SHADER_BASIC_GLES } else { VERTEX_SHADERM_BASIC };
-        let fshdr_tex = if gles2_mode { FRAGMENT_SHADER_TEXTURED_GLES } else { FRAGMENT_SHADERM_TEXTURED };
-        let fshdr_fill = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADERM_COLOR };
-        let fshdr_fill_water = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADERM_WATER };
+        // let vshdr_basic = if gles2_mode { VERTEX_SHADER_BASIC_GLES } else { VERTEX_SHADERM_BASIC };
+        // let fshdr_tex = if gles2_mode { FRAGMENT_SHADER_TEXTURED_GLES } else { FRAGMENT_SHADERM_TEXTURED };
+        // let fshdr_fill = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADERM_COLOR };
+        // let fshdr_fill_water = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADERM_WATER };
 
         
 
@@ -666,6 +675,7 @@ impl RenderData {
             self.fill_water_shader =
                 RenderShader::compile(gl, vshdr_basic, fshdr_fill_water).unwrap_or_else(|_| RenderShader::default());
 
+            self.vao = return_param(|x| gl.gl.GenVertexArrays(1, x));
             self.vbo = return_param(|x| gl.gl.GenBuffers(1, x));
             self.ebo = return_param(|x| gl.gl.GenBuffers(1, x));
 
@@ -877,7 +887,7 @@ impl BackendRenderer for OpenGLRenderer {
                 let matrix =
                     [[2.0f32, 0.0, 0.0, 0.0], [0.0, -2.0, 0.0, 0.0], [0.0, 0.0, -1.0, 0.0], [-1.0, 1.0, 0.0, 1.0]];
 
-                self.render_data.tex_shader.bind_attrib_pointer(gl, self.render_data.vbo);
+                self.render_data.tex_shader.bind_attrib_pointer(gl, self.render_data.vbo, self.render_data.vao);
                 gl.gl.UniformMatrix4fv(self.render_data.tex_shader.proj_mtx, 1, gl::FALSE, matrix.as_ptr() as _);
 
                 let color = (255, 255, 255, 255);
@@ -1079,6 +1089,7 @@ impl BackendRenderer for OpenGLRenderer {
                     vertices: Vec::new(),
                     shader: self.render_data.tex_shader,
                     vbo: self.render_data.vbo,
+                    vao: self.render_data.vao,
                     context_active: self.context_active.clone(),
                 }))
             }
@@ -1119,6 +1130,7 @@ impl BackendRenderer for OpenGLRenderer {
                     vertices: Vec::new(),
                     shader: self.render_data.tex_shader,
                     vbo: self.render_data.vbo,
+                    vao: self.render_data.vao,
                     context_active: self.context_active.clone(),
                 }))
             }
@@ -1254,7 +1266,7 @@ impl BackendRenderer for OpenGLRenderer {
                     VertexData { position: (rect.right as _, rect.bottom as _), uv, color },
                 ];
 
-                self.render_data.fill_shader.bind_attrib_pointer(gl, self.render_data.vbo);
+                self.render_data.fill_shader.bind_attrib_pointer(gl, self.render_data.vbo, self.render_data.vao);
 
                 gl.gl.BindTexture(gl::TEXTURE_2D, self.render_data.font_texture);
                 gl.gl.BindBuffer(gl::ARRAY_BUFFER, self.render_data.vbo);
@@ -1504,13 +1516,13 @@ impl OpenGLRenderer {
             handle_err(gl, 0);
             match shader {
                 BackendShader::Fill => {
-                    self.render_data.fill_shader.bind_attrib_pointer(gl, self.render_data.vbo)?;
+                    self.render_data.fill_shader.bind_attrib_pointer(gl, self.render_data.vbo, self.render_data.vao)?;
                 }
                 BackendShader::Texture => {
-                    self.render_data.tex_shader.bind_attrib_pointer(gl, self.render_data.vbo)?;
+                    self.render_data.tex_shader.bind_attrib_pointer(gl, self.render_data.vbo, self.render_data.vao)?;
                 }
                 BackendShader::WaterFill(scale, t, frame_pos) => {
-                    self.render_data.fill_water_shader.bind_attrib_pointer(gl, self.render_data.vbo)?;
+                    self.render_data.fill_water_shader.bind_attrib_pointer(gl, self.render_data.vbo, self.render_data.vao)?;
                     gl.gl.Uniform1f(self.render_data.fill_water_shader.scale, scale);
                     gl.gl.Uniform1f(self.render_data.fill_water_shader.time, t);
                     gl.gl.Uniform2f(self.render_data.fill_water_shader.frame_offset, frame_pos.0, frame_pos.1);

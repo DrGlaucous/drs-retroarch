@@ -22,13 +22,16 @@ This repo is a "fork" of the [d-rs engine](https://github.com/doukutsu-rs/doukut
 - [ ] Platforms
   - [x] Windows
   - [X] Linux
-  - [ ] Mac OS *(openGL shaders are currently broken here)*
+  - [X] Mac OS *(openGL shaders are currently broken here)*
   - [x] Android
   - [X] iOS
 
 
 ### Use
 It its current state, d-rs runs on 4/5 "big" platforms. *(mac OS was tried, but the compatibility context for harware rendering was broken. Shaders for the backend would not compile, and if the openGL context were set to a version where they'd work, the **frontend's** shaders would break. This doesn't matter too much since d-rs already has a native mac port)*
+
+*Note: the mac OS port now works, but requires at least openGL 3.3 to run. Older versions are not supported by the newest Retroarchs for Mac.*
+
 
 Since this port isn't currently part of libretro's upstream build system, some extra steps need to be taken in order to use it with Retroarch. 
 
@@ -73,6 +76,18 @@ check sign status with
 For convenient developing, just use the `make ios` command in the drsretroarch subdirectory. It will sign and rename the output dll for you. *(I need to add makefile support for the other systems as well, since the linux-based distros automatically add 'lib' to the front of the output.)*
 
 The ad-hoc signed files work with both the sideloaded and appstore versions of retroarch, but it's impossible to put the core in the framework directory with the rest without jailbreaking the phone, so at that point, it's just easier to use the sideloaded version. *(also moving the core directory doesn't work because the apple sandbox forbids loading outside frameworks)*
+
+MacOS needs a debug version of Retroarch to properly debug the core on the system, since the MacOS locks out the debugger from any apps that aren't explicitly flagged as "executable"
+
+Built versions using xcode can be found in:
+`/Users/USER/Library/Developer/Xcode`
+
+(xcode project found in `pkg/apple`)
+[here](https://docs.libretro.com/development/retroarch/compilation/osx/#google_vignette)
+and [here](https://stackoverflow.com/questions/61393040/debug-a-release-version-of-an-osx-app-via-lldb)
+
+
+
 
 </details>
 

@@ -198,7 +198,7 @@ impl<'a>  Core<'a>  {
 
         //try different openGL versions
         let mut render_mode = RenderMode::OpenGl;
-        if !libretro::hw_context::init(ContextType::OpenGlCore, 3, 0) {
+        if !libretro::hw_context::init(ContextType::OpenGl, 3, 0) {
             render_mode = RenderMode::OpenGlES;
             if !libretro::hw_context::init(ContextType::OpenGlEs2, 2, 1) {
                 //log::warn!("Failed to init hardware context");

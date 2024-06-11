@@ -35,17 +35,18 @@ pub const VERTICES: [f32; 9] = [
 
 //"new" opengl 2.1 shaders:
 const VERTEX_SHADER_SOURCE_11: &str = r#"
-    //#version 110 //330 core
-    attribute vec3 aPos;
+    #version 330 //330 core
+    in vec3 aPos;
     void main() {
         gl_Position = vec4(aPos, 1.0);
     }
 "#;
 
 const FRAGMENT_SHADER_SOURCE_11: &str = r#"
-    //#version 110
+    #version 330
+    out vec4 ogl_FragColor;
     void main() {
-        gl_FragColor = vec4(1.0, 0.2, 0.0, 1.0); // Red color
+        ogl_FragColor = vec4(1.0, 0.2, 0.0, 1.0); // Red color
     }
 "#;
 
