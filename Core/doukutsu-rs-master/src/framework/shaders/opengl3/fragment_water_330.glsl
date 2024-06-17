@@ -7,7 +7,7 @@ uniform float Scale;
 uniform vec2 FrameOffset;
 in vec4 Frag_Color;
 
-out vec4 ogl_FragColor;
+out vec4 outColor;
 
 void main()
 {
@@ -40,5 +40,5 @@ void main()
 
     color *= (1.0 - Frag_Color.a);
     color += Frag_Color.rgb * Frag_Color.a;
-    ogl_FragColor = vec4(color, 1.0);
+    outColor = vec4(color, 1.0);
 }

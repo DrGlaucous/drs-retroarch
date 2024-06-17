@@ -43,9 +43,9 @@ impl Context {
     }
 
     pub fn run(&mut self, game: &mut Game) -> GameResult {
-        let backend = init_backend(self.headless, self.size_hint)?; //don't need, backend just used for creating event loop
-        let mut event_loop = backend.create_event_loop(self)?; //don't need, event loop is already created in a higher layer
-        self.renderer = Some(event_loop.new_renderer(self as *mut Context)?); //do need, is used for imgui rendering
+        let backend = init_backend(self.headless, self.size_hint)?;
+        let mut event_loop = backend.create_event_loop(self)?;
+        self.renderer = Some(event_loop.new_renderer(self as *mut Context)?);
 
         event_loop.run(game, self);
 
@@ -63,7 +63,7 @@ impl Context {
         let backend = LibretroBackend::new_nd()?;
         let mut event_loop = backend.create_event_loop_nd(self, get_current_framebuffer, get_proc_address, render_mode)?;
         
-        //we break this out as libretro requires it.
+        //we break this out as libretro needs to call it on its own terms.
         //self.renderer = Some(event_loop.new_renderer(self as *mut Context)?);
 
 

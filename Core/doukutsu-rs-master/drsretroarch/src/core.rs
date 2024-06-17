@@ -26,7 +26,7 @@ use crate::libretro::{self,
     hw_context::ContextType,
     button_pressed,
     get_save_directory,
-    get_system_directory,
+    //get_system_directory,
     gl_frame_done,
     joypad_rumble_context,
     key_pressed,
@@ -54,7 +54,8 @@ pub const SYSTEM_INFO: libretro::SystemInfo = libretro::SystemInfo {
     block_extract: false,
 };
 
-pub const WIDTH: u32 = 640;
+//Width is set relative to height using aspect ratio
+//pub const WIDTH: u32 = 640;
 pub const HEIGHT: u32 = 240; 
 
 pub const GAMEPAD_COUNT: u16 = 2;
@@ -71,38 +72,12 @@ pub fn load_game(target: PathBuf) -> Option<Box<dyn libretro::Context>> {
 }
 
 pub fn init() {
-
+    //nothing to do here
 }
 
 pub fn init_variables() {
     CoreVariables::register();
 }
-
-//get the current state of the backend's video settings (placeholder for now...)
-// fn get_av_info(fps: f32, resolution: (u32, u32), upscaling: u32) -> libretro::SystemAvInfo {
-
-//     // Maximum resolution supported by the PlayStation video
-//     // output is 640x480
-//     let max_width = (resolution.0 * upscaling) as c_uint;
-//     let max_height = (resolution.1 * upscaling) as c_uint;
-
-//     libretro::SystemAvInfo {
-//         geometry: libretro::GameGeometry {
-//             // The base resolution will be overriden using
-//             // ENVIRONMENT_SET_GEOMETRY before rendering a frame so
-//             // this base value is not really important
-//             base_width: max_width,
-//             base_height: max_height,
-//             max_width: max_width,
-//             max_height: max_height,
-//             aspect_ratio: (max_width as f32)/(max_height as f32),
-//         },
-//         timing: libretro::SystemTiming {
-//             fps: fps as f64,
-//             sample_rate: 44_100. //samples per second
-//         }
-//     }
-// }
 
 ////////////////////////SETTINGS
 
@@ -197,9 +172,12 @@ impl<'a>  Core<'a>  {
         }
 
         //try different openGL versions
-        let mut render_mode = RenderMode::OpenGl;
-        if !libretro::hw_context::init(ContextType::OpenGl, 3, 0) {
-            render_mode = RenderMode::OpenGlES;
+
+        let gl_version = if cfg!(target_os = "macos") {(3, 3)} else {(2, 1)}; // mac OS demands at least openGL3 with retroarch frontend
+
+        let mut render_mode = RenderMode::OpenGL(gl_version.0, gl_version.1);
+        if !libretro::hw_context::init(ContextType::OpenGlCore, gl_version.0, gl_version.1) {
+            render_mode = RenderMode::OpenGLES;
             if !libretro::hw_context::init(ContextType::OpenGlEs2, 2, 1) {
                 //log::warn!("Failed to init hardware context");
                 rlog::log(Level::Error, "Failed to init hardware context");
@@ -231,12 +209,13 @@ impl<'a>  Core<'a>  {
             false
         } else {true};
 
-        //function to use in order to get the current framebuffer
+        //function to use in order to get the current framebuffer (must be handed down to the backend renderer)
         let get_current_framebuffer: fn() -> usize = libretro::hw_context::get_current_framebuffer;
         let get_proc_address: fn(&str) -> *const c_void = libretro::hw_context::get_proc_address;
 
         //create a hook to grab the audio backend from shared_game_state
         let mut audio_runner: Option<Runner> = None;
+        //default config that retroarch runs with
         let sound_config = OutputBufConfig {
             sample_rate: 44_100.0,
             channel_count: 2,
@@ -267,7 +246,7 @@ impl<'a>  Core<'a>  {
             //log::warn!("Failed to get save directory. Using portable directory.");
             rlog::log(Level::Warn, "Failed to get save directory. Using portable directory.");
             
-            let mut usr_target = resource_dir.clone();//.pop().push("user");
+            let mut usr_target = resource_dir.clone();
             let _ = usr_target.pop();
 
             usr_target.push("user");
@@ -295,7 +274,7 @@ impl<'a>  Core<'a>  {
 		let game_ptr = game.as_mut().get_mut();
 
 
-		let (backend, mut event_loop) = context.create_backend(game_ptr, get_current_framebuffer, get_proc_address, render_mode).unwrap();
+		let (backend, event_loop) = context.create_backend(game_ptr, get_current_framebuffer, get_proc_address, render_mode).unwrap();
 
         let state_ref = unsafe {&mut *game.state.get()};
 
@@ -309,8 +288,7 @@ impl<'a>  Core<'a>  {
             backend,
             event_loop,
             context,
-
-            state_ref: state_ref,
+            state_ref,
             game,
             screen_height: initial_height,
             screen_width: initial_width,
@@ -528,8 +506,6 @@ impl<'a>  libretro::Context  for Core<'a>  {
 
     //soft-reset (gl is not re-initialized, send game back to top menu)
     fn reset(&mut self) {
-
-        //game.state.get_mut().next_scene = Some(Box::new(LoadingScene::new()));
         self.state_ref.next_scene = Some(Box::new(title_scene::TitleScene::new()));
     }
 

@@ -21,7 +21,7 @@ use crate::framework::error::GameResult;
 use crate::framework::filesystem;
 use crate::framework::gl;
 use crate::framework::keyboard::ScanCode;
-use crate::framework::render_opengl::{GLContext, OpenGLRenderer};
+use crate::framework::render_opengl::{GLContext, OpenGLRenderer, GlVersionInfo};
 use crate::game::Game;
 use crate::game::GAME_SUSPENDED;
 use crate::input::touch_controls::TouchPoint;
@@ -407,7 +407,8 @@ impl BackendEventLoop for GlutinEventLoop {
             *user_data = Rc::into_raw(refs) as *mut c_void;
         }
 
-        let gl_context = GLContext { gles2_mode: true, is_sdl: false, get_proc_address, swap_buffers, user_data, ctx };
+        let gl_version = GlVersionInfo::OpenGLES;
+        let gl_context = GLContext { gl_version, is_sdl: false, get_proc_address, swap_buffers, user_data, ctx };
 
         Ok(Box::new(OpenGLRenderer::new(gl_context, UnsafeCell::new(imgui))))
     }

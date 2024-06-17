@@ -33,7 +33,7 @@ use crate::input::touch_controls::TouchPoint;
 
 
 //gl stuff
-use crate::framework::render_opengl::{GLContext, OpenGLRenderer};
+use crate::framework::render_opengl::{GLContext, OpenGLRenderer, GlVersionInfo};
 use crate::framework::gl;
 
 use crate::game::shared_game_state::SharedGameState;
@@ -45,8 +45,8 @@ use super::gamepad::{Button, Axis};
 #[derive(PartialEq)]
 pub enum RenderMode {
     None,
-    OpenGl,
-    OpenGlES,
+    OpenGL(u32, u32),
+    OpenGLES,
     Software,
 }
 
@@ -74,8 +74,6 @@ impl LibretroBackend {
 impl Backend for LibretroBackend {
     fn create_event_loop(&self, _ctx: &Context) -> GameResult<Box<dyn BackendEventLoop>> {
         Err(GameError::CommandLineError(("This function should not be called with this backend!".to_owned())))
-
-        //Ok(LibretroEventLoop::new().unwrap())
     }
     
     fn as_any(&self) -> &dyn Any {
@@ -306,8 +304,14 @@ impl BackendEventLoop for LibretroEventLoop {
         }
 
 
-        let gl_context = GLContext { gles2_mode: (self.render_mode == RenderMode::OpenGlES), is_sdl: false, get_proc_address, swap_buffers, get_current_buffer, user_data, ctx };
-        //let gl_context = GLContext { gles2_mode: false, is_sdl: false, get_proc_address, swap_buffers, user_data, ctx };
+        let gl_version = match &self.render_mode {
+            RenderMode::OpenGL(maj, min) => GlVersionInfo::OpenGL(*maj, *min),
+            RenderMode::OpenGLES => GlVersionInfo::OpenGLES,
+            _ => GlVersionInfo::OpenGL(0,0), // this case should never be reached
+        };
+
+        let gl_context = GLContext { gl_version, is_sdl: false, get_proc_address, swap_buffers, get_current_buffer, user_data, ctx };
+        //let gl_context = GLContext { gles2_mode: (self.render_mode == RenderMode::OpenGlES), is_sdl: false, get_proc_address, swap_buffers, get_current_buffer, user_data, ctx };
 
         //Err(super::error::GameError::CommandLineError(("Not Done Yet!".to_owned())))//=>{log::error!("not done yet!")}
         Ok(Box::new(OpenGLRenderer::new(gl_context, UnsafeCell::new(imgui))))

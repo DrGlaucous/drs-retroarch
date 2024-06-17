@@ -142,10 +142,15 @@ pub fn save_bitmap(filename: &str, width: u32, height: u32, pixels: &[u8]) {
     file.write_all(&pixels).expect("Failed to write pixels to file");
 }
 
-
+#[derive(PartialEq, Clone, Copy)]
+pub enum GlVersionInfo {
+    OpenGL(u32, u32),
+    OpenGLES,
+}
 
 pub struct GLContext {
-    pub gles2_mode: bool,
+    //pub gles2_mode: bool,
+    pub gl_version: GlVersionInfo,
     pub is_sdl: bool,
     pub get_proc_address: unsafe fn(user_data: &mut *mut c_void, name: &str) -> *const c_void, //gets the address of the opengl function
     pub swap_buffers: unsafe fn(user_data: &mut *mut c_void), //swaps hardware buffers for rendering (only for double-buffered systems)
@@ -448,26 +453,28 @@ fn check_shader_compile_status(shader: u32, gl: &Gl) -> GameResult {
     Ok(())
 }
 
+// opengl 2.1 shaders with header "#version 110"
 const VERTEX_SHADER_BASIC: &str = include_str!("shaders/opengl/vertex_basic_110.glsl");
 const FRAGMENT_SHADER_TEXTURED: &str = include_str!("shaders/opengl/fragment_textured_110.glsl");
 const FRAGMENT_SHADER_COLOR: &str = include_str!("shaders/opengl/fragment_color_110.glsl");
 const FRAGMENT_SHADER_WATER: &str = include_str!("shaders/opengl/fragment_water_110.glsl");
 
+// openglES shaders
 const VERTEX_SHADER_BASIC_GLES: &str = include_str!("shaders/opengles/vertex_basic_100.glsl");
 const FRAGMENT_SHADER_TEXTURED_GLES: &str = include_str!("shaders/opengles/fragment_textured_100.glsl");
 const FRAGMENT_SHADER_COLOR_GLES: &str = include_str!("shaders/opengles/fragment_color_100.glsl");
 
+// opengl 3.3 shaders with header "#version 330 core" (mainly for retroarch macOS)
+const VERTEX_SHADER3_BASIC: &str = include_str!("shaders/opengl3/vertex_basic_330.glsl");
+const FRAGMENT_SHADER3_TEXTURED: &str = include_str!("shaders/opengl3/fragment_textured_330.glsl");
+const FRAGMENT_SHADER3_COLOR: &str = include_str!("shaders/opengl3/fragment_color_330.glsl");
+const FRAGMENT_SHADER3_WATER: &str = include_str!("shaders/opengl3/fragment_water_330.glsl");
 
-const VERTEX_SHADER4_BASIC: &str = include_str!("shaders/opengl4/vertex_basic_410.glsl");
-const FRAGMENT_SHADER4_TEXTURED: &str = include_str!("shaders/opengl4/fragment_textured_410.glsl");
-const FRAGMENT_SHADER4_COLOR: &str = include_str!("shaders/opengl4/fragment_color_410.glsl");
-const FRAGMENT_SHADER4_WATER: &str = include_str!("shaders/opengl4/fragment_water_410.glsl");
-
+// same as stock 2.1 shaders but without version headers (mainly for retroarch, but also works on desktop)
 const VERTEX_SHADERM_BASIC: &str = include_str!("shaders/openglm/vertex_basic_m.glsl");
 const FRAGMENT_SHADERM_TEXTURED: &str = include_str!("shaders/openglm/fragment_textured_m.glsl");
 const FRAGMENT_SHADERM_COLOR: &str = include_str!("shaders/openglm/fragment_color_m.glsl");
 const FRAGMENT_SHADERM_WATER: &str = include_str!("shaders/openglm/fragment_water_m.glsl");
-
 
 #[derive(Copy, Clone)]
 struct RenderShader {
@@ -645,26 +652,58 @@ impl RenderData {
         }
     }
 
-    fn init(&mut self, gles2_mode: bool, imgui: &mut imgui::Context, gl: &Gl) {
+    fn init(&mut self, gl_version: GlVersionInfo, imgui: &mut imgui::Context, gl: &Gl) {
         self.initialized = true;
 
-        // let vshdr_basic = if gles2_mode { VERTEX_SHADER_BASIC_GLES } else { VERTEX_SHADER_BASIC };
-        // let fshdr_tex = if gles2_mode { FRAGMENT_SHADER_TEXTURED_GLES } else { FRAGMENT_SHADER_TEXTURED };
-        // let fshdr_fill = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER_COLOR };
-        // let fshdr_fill_water = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER_WATER };
 
-        let vshdr_basic = if gles2_mode { VERTEX_SHADER_BASIC_GLES } else { VERTEX_SHADER4_BASIC };
-        let fshdr_tex = if gles2_mode { FRAGMENT_SHADER_TEXTURED_GLES } else { FRAGMENT_SHADER4_TEXTURED };
-        let fshdr_fill = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER4_COLOR };
-        let fshdr_fill_water = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADER4_WATER };
 
-        // let vshdr_basic = if gles2_mode { VERTEX_SHADER_BASIC_GLES } else { VERTEX_SHADERM_BASIC };
-        // let fshdr_tex = if gles2_mode { FRAGMENT_SHADER_TEXTURED_GLES } else { FRAGMENT_SHADERM_TEXTURED };
-        // let fshdr_fill = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADERM_COLOR };
-        // let fshdr_fill_water = if gles2_mode { FRAGMENT_SHADER_COLOR_GLES } else { FRAGMENT_SHADERM_WATER };
+        // decide what shader files to use
+        let (
+            vshdr_basic,
+            fshdr_tex,
+            fshdr_fill,
+            fshdr_fill_water,
+        ) = match gl_version {
+            GlVersionInfo::OpenGL(maj, min) => {
+                if maj == 3 {
+                    if min == 0 {
+                        // (desktop gl requests 3.0) (which also includes 2.1 compatability)
+                        (
+                            VERTEX_SHADER_BASIC,
+                            FRAGMENT_SHADER_TEXTURED,
+                            FRAGMENT_SHADER_COLOR,
+                            FRAGMENT_SHADER_WATER
+                        )
+                    } else {
+                        // (retroarch mac requests strict 3.3)
+                        (
+                            VERTEX_SHADER3_BASIC,
+                            FRAGMENT_SHADER3_TEXTURED,
+                            FRAGMENT_SHADER3_COLOR,
+                            FRAGMENT_SHADER3_WATER
+                        )
+                    }
+                } else {
+                    // (retroarch requests 2.1)
+                    (
+                        VERTEX_SHADERM_BASIC,
+                        FRAGMENT_SHADERM_TEXTURED,
+                        FRAGMENT_SHADERM_COLOR,
+                        FRAGMENT_SHADERM_WATER
+                    )
+                }
 
-        
-
+            },
+            GlVersionInfo::OpenGLES => {
+                // mobile uses openGLES 2 regardless of port
+                (
+                    VERTEX_SHADER_BASIC_GLES,
+                    FRAGMENT_SHADER_TEXTURED_GLES,
+                    FRAGMENT_SHADER_COLOR_GLES,
+                    FRAGMENT_SHADER_COLOR_GLES
+                )
+            },
+        };
 
         unsafe {
             handle_err(gl, 0);
@@ -806,13 +845,13 @@ impl OpenGLRenderer {
     fn get_context(&mut self) -> Option<(&mut GLContext, &'static Gl)> {
         let imgui = unsafe { &mut *self.imgui.get() };
 
-        let gles2 = self.refs.gles2_mode;
+        let gl_version = self.refs.gl_version;
         let gl = load_gl(&mut self.refs);
 
         handle_err(gl, 0);
 
         if !self.render_data.initialized {
-            self.render_data.init(gles2, imgui, gl);
+            self.render_data.init(gl_version, imgui, gl);
         }
 
         Some((&mut self.refs, gl))
@@ -823,11 +862,20 @@ impl OpenGLRenderer {
 
 impl BackendRenderer for OpenGLRenderer {
     fn renderer_name(&self) -> String {
-        if self.refs.gles2_mode {
-            "OpenGL ES 2.0".to_string()
-        } else {
-            "OpenGL 2.1".to_string()
+
+        match self.refs.gl_version {
+            GlVersionInfo::OpenGL(maj, min) => {
+                format!("OpenGL {}.{}", maj, min).to_string()
+            },
+            GlVersionInfo::OpenGLES => {
+                "OpenGL ES 2.0".to_string()
+            }
         }
+        // if self.refs.gles2_mode {
+        //     "OpenGL ES 2.0".to_string()
+        // } else {
+        //     "OpenGL 2.1".to_string()
+        // }
     }
 
     fn clear(&mut self, color: Color) {
