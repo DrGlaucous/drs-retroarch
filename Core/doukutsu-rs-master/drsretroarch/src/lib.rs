@@ -7,8 +7,6 @@ extern crate log;
 pub mod libretro;
 mod core;
 
-//old implementation
-//mod libretro_a;
 
 
 
