@@ -1706,7 +1706,7 @@ impl EngineConstants {
                         (Axis::TriggerRight, GamepadConsts::rects(Rect::new(32, 80, 64, 96))),
                     ]),
                 };
-                // Swap x-y and -ab buttons on nintendo map (must be done here to comply with the nicalis button table)
+                // Swap x-y and a-b buttons on nintendo map (must be done here to comply with the nicalis button table)
                 let button = holder.button_rects.get(&Button::North).unwrap()[3].clone();
                 holder.button_rects.get_mut(&Button::North).unwrap()[3] = holder.button_rects.get(&Button::West).unwrap()[3];
                 holder.button_rects.get_mut(&Button::West).unwrap()[3] = button;
